@@ -52,13 +52,14 @@ if (-not (Test-Path "$target.new")) {
 $checksumUrl = "$url/../SHA256SUMS.txt"
 try {
     $checksums = (Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing).Content
-    $expectedHash = ($checksums -split "`n" | Where-Object { $_ -match " $assetName`$" }) -split ' ' | Select-Object -First 1
+    $pattern = ' ' + [regex]::Escape($assetName) + '$'
+    $expectedHash = ($checksums -split "`n" | Where-Object { $_ -match $pattern }) -split ' ' | Select-Object -First 1
     if ($expectedHash) {
         $actualHash = (Get-FileHash -Path "$target.new" -Algorithm SHA256).Hash.ToLower()
         if ($expectedHash.ToLower() -ne $actualHash) {
             Write-Host "  SHA256 mismatch." -ForegroundColor Red
             Remove-Item "$target.new" -ErrorAction SilentlyContinue
-            return
+            exit 1
         }
     }
 } catch { }
@@ -74,7 +75,7 @@ try {
     Write-Host "  Could not replace binary. Close any running processes and retry." -ForegroundColor Red
     if (Test-Path $oldTarget) { Move-Item $oldTarget $target -Force }
     Remove-Item "$target.new" -ErrorAction SilentlyContinue
-    return
+    exit 1
 }
 Remove-Item $oldTarget -Force -ErrorAction SilentlyContinue
 

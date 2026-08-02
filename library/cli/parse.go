@@ -42,9 +42,11 @@ func Parse(args []string) (Command, error) {
 	// Global --help and --version.
 	switch args[0] {
 	case "--help", "-h":
-		return Command{Name: "help"}, ErrUsage
+		cmd.Name = "help"
+		return cmd, ErrUsage
 	case "--version", "-v":
-		return Command{Name: "version"}, nil
+		cmd.Name = "version"
+		return cmd, nil
 	}
 
 	cmd.Name = args[0]
@@ -52,10 +54,12 @@ func Parse(args []string) (Command, error) {
 
 	switch cmd.Name {
 	case "help":
-		return Command{Name: "help"}, ErrUsage
+		cmd.Name = "help"
+		return cmd, ErrUsage
 
 	case "version":
-		return Command{Name: "version"}, nil
+		cmd.Name = "version"
+		return cmd, nil
 
 	case "install", "configure", "uninstall":
 		fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)

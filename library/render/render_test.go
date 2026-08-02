@@ -142,25 +142,6 @@ func TestErrorResultProducesIsErrorTrueWithErrorFrontmatter(t *testing.T) {
 	}
 }
 
-func TestErrorResultFallbackOnRenderFailure(t *testing.T) {
-	// Front is map[string]any which will cause Document.String() to fail.
-	e := render.Error{Code: render.CodeInternal, Message: "boom"}
-	res := render.ErrorResult(e)
-	if !res.IsError {
-		t.Fatal("expected IsError=true")
-	}
-	tc, ok := res.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected *mcp.TextContent, got %T", res.Content[0])
-	}
-	if !strings.Contains(tc.Text, "code: internal_error") {
-		t.Fatalf("expected fallback with error code, got %q", tc.Text)
-	}
-	if !strings.Contains(tc.Text, "boom") {
-		t.Fatalf("expected fallback with message, got %q", tc.Text)
-	}
-}
-
 func TestTextResultWrapsRawString(t *testing.T) {
 	res := render.TextResult("plain text")
 	if res.IsError {

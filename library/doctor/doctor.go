@@ -161,10 +161,14 @@ func (c UpdateCheck) Run(ctx context.Context) Result {
 		return Result{Name: c.Name(), Status: Warn, Detail: fmt.Sprintf("check failed: %v", err)}
 	}
 	if !available {
-		if latest != "" {
-			return Result{Name: c.Name(), Status: OK, Detail: fmt.Sprintf("up to date (%s)", c.Opts.CurrentVersion)}
+		if latest == "" {
+			return Result{Name: c.Name(), Status: Warn, Detail: "could not check for updates"}
 		}
-		return Result{Name: c.Name(), Status: Warn, Detail: "could not check for updates"}
+		// Verify current version is parseable before claiming up-to-date.
+		if _, err := update.Parse(c.Opts.CurrentVersion); err != nil {
+			return Result{Name: c.Name(), Status: Warn, Detail: fmt.Sprintf("unparseable current version %q; latest is %s", c.Opts.CurrentVersion, latest)}
+		}
+		return Result{Name: c.Name(), Status: OK, Detail: fmt.Sprintf("up to date (%s)", c.Opts.CurrentVersion)}
 	}
 	return Result{Name: c.Name(), Status: Warn, Detail: fmt.Sprintf("update available: %s (current: %s)", latest, c.Opts.CurrentVersion)}
 }

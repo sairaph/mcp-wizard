@@ -8,6 +8,11 @@ import (
 	"${ModulePath}/internal/domain"
 )
 
+// Config holds application configuration.
+type Config struct {
+	Version string
+}
+
 type Service struct {
 	cfg Config
 }

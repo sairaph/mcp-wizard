@@ -143,7 +143,9 @@ func scaffoldProject(targetDir string, subs map[string]string) error {
 		}
 
 		if filepath.Ext(targetPath) == ".sh" || filepath.Ext(targetPath) == ".ps1" {
-			os.Chmod(targetPath, 0755)
+			if err := os.Chmod(targetPath, 0755); err != nil {
+				return fmt.Errorf("chmod %s: %w", targetPath, err)
+			}
 		}
 
 		return nil
@@ -187,7 +189,9 @@ func scaffoldScripts(targetDir string, subs map[string]string) error {
 		}
 
 		if filepath.Ext(targetPath) == ".sh" || filepath.Ext(targetPath) == ".ps1" {
-			os.Chmod(targetPath, 0755)
+			if err := os.Chmod(targetPath, 0755); err != nil {
+				return fmt.Errorf("chmod %s: %w", targetPath, err)
+			}
 		}
 
 		return nil

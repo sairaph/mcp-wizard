@@ -1,20 +1,14 @@
 package mcpserver
 
 import (
-	"os"
-
 	"${ModulePath}/internal/app"
 )
 
-func ConfigFromEnv() Config {
+func ConfigFromEnv(version string) Config {
 	return Config{
-		Version: os.Getenv("VERSION"),
-		App:     appConfigFromEnv(),
-	}
-}
-
-func appConfigFromEnv() app.Config {
-	return app.Config{
 		Version: version,
+		App: app.Config{
+			Version: version,
+		},
 	}
 }

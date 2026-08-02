@@ -98,7 +98,7 @@ func Truncate(text string, tokenLimit, byteLimit int) (prefix string, tokens int
 		return "", 0, false, errors.New("token budget input is not valid UTF-8")
 	}
 	if tokenLimit <= 0 && byteLimit <= 0 {
-		return "", 0, text != "", nil
+		return text, 0, false, nil
 	}
 	if tokenLimit <= 0 {
 		tokenLimit = math.MaxInt

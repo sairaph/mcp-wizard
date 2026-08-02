@@ -8,11 +8,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func randString(n int) string {
 	b := make([]byte, n)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		for i := range b {
+			b[i] = byte(time.Now().UnixNano() >> uint(i*8%64))
+		}
+	}
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	for i := range b {
 		b[i] = letters[int(b[i])%len(letters)]
@@ -48,6 +53,9 @@ func NewFileStore(path string) *FileStore {
 }
 
 func (s *FileStore) Save(ctx context.Context, sess *Session) error {
+	if sess == nil {
+		return errors.New("secret: cannot save nil session")
+	}
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create credential directory: %w", err)

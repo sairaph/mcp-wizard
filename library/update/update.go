@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"time"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -27,8 +28,8 @@ type Options struct {
 }
 
 // Check queries the GitHub releases API for the latest version.
-// Returns ("", false, nil) on any error (network, rate limit) — never
-// returns an error for unreachable servers; that's a doctor warning.
+// Returns the latest version string and whether an update is available.
+// Returns an error on network failures, non-200 status, or decode errors.
 func Check(ctx context.Context, opts Options) (latest string, available bool, err error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", opts.Owner, opts.Repo)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -128,7 +129,10 @@ func SelfUpdate(ctx context.Context, opts Options) error {
 		_ = os.Remove(tempFile)
 		return fmt.Errorf("download write: %w", err)
 	}
-	_ = f.Close()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tempFile)
+		return fmt.Errorf("close downloaded file: %w", err)
+	}
 
 	downloadedHash := hex.EncodeToString(hash.Sum(nil))
 
@@ -166,6 +170,7 @@ func SelfUpdate(ctx context.Context, opts Options) error {
 // SwapFrom performs the swap when the install script has already downloaded
 // the binary to a temp file. Used for the `<bin> update --from <tempfile>` path.
 func SwapFrom(ctx context.Context, tempPath string, opts Options) error {
+	defer os.Remove(tempPath)
 	if err := os.Chmod(tempPath, 0755); err != nil {
 		return fmt.Errorf("chmod temp binary: %w", err)
 	}
@@ -244,7 +249,11 @@ func swapFile(source, target string) error {
 
 func randString(n int) string {
 	b := make([]byte, n)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		for i := range b {
+			b[i] = byte(time.Now().UnixNano() >> uint(i*8%64))
+		}
+	}
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	for i := range b {
 		b[i] = letters[int(b[i])%len(letters)]

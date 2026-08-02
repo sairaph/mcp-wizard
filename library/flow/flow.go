@@ -114,7 +114,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			base.Width = wm.Width
 			base.Height = wm.Height
 		}
-		return m, nil
+		return m, m.cmd
 	}
 
 	if _, ok := msg.(tea.QuitMsg); ok {
@@ -139,9 +139,8 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.step.Init(m.flow.state)
 
 	// Skip advances to the next step without rendering the current one.
-	// A step's Init returns Skip to conditionally bypass itself.
-	// At the framework level, Skip is identical to Next — the difference
-	// is that Init returned Skip (not a user action that returned Next).
+	// The flowModel.Init method checks whether a step's Init returned a
+	// Directive (via type assertion) and handles Skip specially.
 	case Skip:
 		if !m.flow.Advance() {
 			return m, tea.Quit

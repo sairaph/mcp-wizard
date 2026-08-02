@@ -53,12 +53,15 @@ func Classify(err error, table []ErrorMapping) Error {
 				if errors.As(err, dbl.Interface()) {
 					message := err.Error()
 					var fields map[string]any
-					if mapping.Extract != nil {
-						if msg, f := mapping.Extract(err); msg != "" {
-							message = msg
-							fields = f
-						}
+				if mapping.Extract != nil {
+					msg, f := mapping.Extract(err)
+					if msg != "" {
+						message = msg
 					}
+					if f != nil {
+						fields = f
+					}
+				}
 					return Error{
 						Code:    mapping.Code,
 						Message: message,
