@@ -1,6 +1,8 @@
 package flow
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -66,18 +68,25 @@ func (f *Flow[T]) Model() tea.Model {
 //
 //	0 — normal completion or Quit before Settled
 //	1 — Fail (state.Failure is non-nil)
+//
+// The state type T must embed *BaseState for Failure detection;
+// otherwise, ExitCode always returns 0.
 func (f *Flow[T]) ExitCode() int {
 	if f.state == nil {
 		return 0
 	}
-	var base *BaseState
-	if b, ok := any(f.state).(interface{ GetBaseState() *BaseState }); ok {
-		base = b.GetBaseState()
-	}
+	base := f.getBaseState()
 	if base != nil && base.Failure != nil {
 		return 1
 	}
 	return 0
+}
+
+func (f *Flow[T]) getBaseState() *BaseState {
+	if b, ok := any(f.state).(interface{ GetBaseState() *BaseState }); ok {
+		return b.GetBaseState()
+	}
+	return nil
 }
 
 // GetBaseState is the interface consumer state structs implement
@@ -92,17 +101,16 @@ type flowModel[T any] struct {
 }
 
 func (m *flowModel[T]) Init() tea.Cmd {
+	if len(m.flow.steps) == 0 {
+		return tea.Quit
+	}
 	m.step = m.flow.steps[m.flow.current]
 	return m.step.Init(m.flow.state)
 }
 
 func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if wm, ok := msg.(tea.WindowSizeMsg); ok {
-		var base *BaseState
-		if b, ok := any(m.flow.state).(interface{ GetBaseState() *BaseState }); ok {
-			base = b.GetBaseState()
-		}
-		if base != nil {
+		if base := m.flow.getBaseState(); base != nil {
 			base.Width = wm.Width
 			base.Height = wm.Height
 		}
@@ -130,6 +138,10 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.step = m.flow.steps[m.flow.current]
 		return m, m.step.Init(m.flow.state)
 
+	// Skip advances to the next step without rendering the current one.
+	// A step's Init returns Skip to conditionally bypass itself.
+	// At the framework level, Skip is identical to Next — the difference
+	// is that Init returned Skip (not a user action that returned Next).
 	case Skip:
 		if !m.flow.Advance() {
 			return m, tea.Quit
@@ -139,10 +151,19 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case Jump:
 		nextStep := ""
-		if b, ok := any(m.flow.state).(interface{ GetBaseState() *BaseState }); ok {
-			nextStep = b.GetBaseState().NextStep
+		if base := m.flow.getBaseState(); base != nil {
+			nextStep = base.NextStep
+		}
+		if nextStep == "" {
+			if base := m.flow.getBaseState(); base != nil {
+				base.Failure = fmt.Errorf("flow: Jump directive used without setting NextStep")
+			}
+			return m, tea.Quit
 		}
 		if !m.flow.JumpTo(nextStep) {
+			if base := m.flow.getBaseState(); base != nil {
+				base.Failure = fmt.Errorf("flow: no step with ID %q", nextStep)
+			}
 			return m, tea.Quit
 		}
 		m.step = m.flow.steps[m.flow.current]
@@ -152,6 +173,9 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case Fail:
+		if base := m.flow.getBaseState(); base != nil && base.Failure == nil {
+			base.Failure = fmt.Errorf("flow: step %q returned Fail without setting Failure", m.step.ID())
+		}
 		return m, tea.Quit
 
 	default:

@@ -4,6 +4,8 @@ package budget
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -14,10 +16,24 @@ import (
 var (
 	codecOnce sync.Once
 	encoder   *codec.Codec
+	encErr    error
 )
 
 func encoding() (*codec.Codec, error) {
-	codecOnce.Do(func() { encoder = codec.NewO200kBase() })
+	codecOnce.Do(func() {
+		defer func() {
+			if r := recover(); r != nil {
+				encErr = fmt.Errorf("tokenizer init panic: %v", r)
+			}
+		}()
+		encoder = codec.NewO200kBase()
+		if encoder == nil {
+			encErr = errors.New("codec.NewO200kBase returned nil")
+		}
+	})
+	if encErr != nil {
+		return nil, encErr
+	}
 	return encoder, nil
 }
 
@@ -81,8 +97,14 @@ func Truncate(text string, tokenLimit, byteLimit int) (prefix string, tokens int
 	if !utf8.ValidString(text) {
 		return "", 0, false, errors.New("token budget input is not valid UTF-8")
 	}
-	if tokenLimit <= 0 || byteLimit <= 0 {
+	if tokenLimit <= 0 && byteLimit <= 0 {
 		return "", 0, text != "", nil
+	}
+	if tokenLimit <= 0 {
+		tokenLimit = math.MaxInt
+	}
+	if byteLimit <= 0 {
+		byteLimit = len(text)
 	}
 
 	bounded := text
@@ -119,6 +141,9 @@ func Truncate(text string, tokenLimit, byteLimit int) (prefix string, tokens int
 	}
 
 	truncated = true
+	if len(pieces) < tokenLimit {
+		tokenLimit = len(pieces)
+	}
 	prefix = validPrefix(strings.Join(pieces[:tokenLimit], ""), len(candidate))
 	tokens, err = enc.Count(prefix)
 	if err != nil {

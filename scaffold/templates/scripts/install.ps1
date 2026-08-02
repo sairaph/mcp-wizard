@@ -9,8 +9,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Get-Arch {
-  $arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
-  return $arch
+  $arch = $env:PROCESSOR_ARCHITECTURE
+  switch ($arch) {
+    { $_ -in 'AMD64','x64' } { return 'amd64' }
+    'ARM64'                  { return 'arm64' }
+    default                  { Write-Host "  Unsupported architecture: $arch" -ForegroundColor Red; return }
+  }
 }
 
 function Get-OS {
@@ -19,9 +23,11 @@ function Get-OS {
 
 $os = Get-OS
 $arch = Get-Arch
+$assetName = "$Bin-$os-$arch.exe"
 $asset = "$Bin-$os-$arch.exe"
 $url = "https://github.com/$Owner/$Repo/releases/latest/download/$asset"
-$installDir = "$env:LOCALAPPDATA\$Repo\bin"
+$localAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $env:USERPROFILE "AppData\Local" }
+$installDir = Join-Path $localAppData "$Repo\bin"
 $target = "$installDir\$Bin.exe"
 
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
@@ -42,7 +48,35 @@ if (-not (Test-Path "$target.new")) {
   exit 1
 }
 
-Move-Item -Force "$target.new" $target
+# Verify SHA256 checksum
+$checksumUrl = "$url/../SHA256SUMS.txt"
+try {
+    $checksums = (Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing).Content
+    $expectedHash = ($checksums -split "`n" | Where-Object { $_ -match " $assetName`$" }) -split ' ' | Select-Object -First 1
+    if ($expectedHash) {
+        $actualHash = (Get-FileHash -Path "$target.new" -Algorithm SHA256).Hash.ToLower()
+        if ($expectedHash.ToLower() -ne $actualHash) {
+            Write-Host "  SHA256 mismatch." -ForegroundColor Red
+            Remove-Item "$target.new" -ErrorAction SilentlyContinue
+            return
+        }
+    }
+} catch { }
+
+# Swap the new binary into place using move-aside
+$oldTarget = "$target.old-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
+if (Test-Path $target) {
+    Move-Item $target $oldTarget -Force
+}
+try {
+    Move-Item "$target.new" $target -Force
+} catch {
+    Write-Host "  Could not replace binary. Close any running processes and retry." -ForegroundColor Red
+    if (Test-Path $oldTarget) { Move-Item $oldTarget $target -Force }
+    Remove-Item "$target.new" -ErrorAction SilentlyContinue
+    return
+}
+Remove-Item $oldTarget -Force -ErrorAction SilentlyContinue
 
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notlike "*$installDir*") {

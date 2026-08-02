@@ -2,12 +2,23 @@ package secret
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 )
+
+func randString(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	for i := range b {
+		b[i] = letters[int(b[i])%len(letters)]
+	}
+	return string(b)
+}
 
 // Store is the credential persistence interface.
 type Store interface {
@@ -48,21 +59,16 @@ func (s *FileStore) Save(ctx context.Context, sess *Session) error {
 	}
 
 	// Atomic write: write to temp file, rename into place.
-	tmp, err := os.CreateTemp(dir, ".credentials-*")
+	tmpPath := filepath.Join(dir, ".credentials-"+randString(8)+".tmp")
+	tmp, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("create temp credential file: %w", err)
 	}
-	tmpPath := tmp.Name()
 
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write credentials: %w", err)
-	}
-	if err := tmp.Chmod(0600); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("set credential file permissions: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
@@ -129,7 +135,7 @@ func (s *EnvStore) Load(_ context.Context) (*Session, bool, error) {
 	sess := NewSession()
 	found := false
 	for key, envName := range s.mapping {
-		if val := os.Getenv(envName); val != "" {
+		if val, ok := os.LookupEnv(envName); ok {
 			sess.Set(key, val)
 			found = true
 		}

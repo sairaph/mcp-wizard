@@ -8,6 +8,7 @@ import (
 // Fence renders content inside a tilde-fenced block, growing the fence
 // past any content tildes. language is emitted as the info-string.
 func Fence(content, language string) string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
 	longest := 2
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimLeft(line, " \t")

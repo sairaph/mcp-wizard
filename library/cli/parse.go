@@ -35,7 +35,8 @@ func Parse(args []string) (Command, error) {
 	cmd.Credentials = make(map[string]string)
 
 	if len(args) == 0 {
-		return Command{Name: "mcp"}, nil
+		cmd.Name = "mcp"
+		return cmd, nil
 	}
 
 	// Global --help and --version.
@@ -58,6 +59,7 @@ func Parse(args []string) (Command, error) {
 
 	case "install", "configure", "uninstall":
 		fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
+		fs.Usage = func() {}
 		fs.BoolVar(&cmd.All, "all", false, "register with all known clients")
 		fs.BoolVar(&cmd.Yes, "yes", false, "non-interactive mode")
 		fs.BoolVar(&cmd.DryRun, "dry-run", false, "show what would change")
@@ -70,7 +72,7 @@ func Parse(args []string) (Command, error) {
 
 		if err := fs.Parse(tail); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
-				return Command{Name: "help"}, ErrUsage
+				return cmd, ErrUsage
 			}
 			return cmd, err
 		}
@@ -93,7 +95,11 @@ func Parse(args []string) (Command, error) {
 	case "mcp", "server", "serve":
 		cmd.Name = "mcp"
 		fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
+		fs.Usage = func() {}
 		if err := fs.Parse(tail); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return cmd, ErrUsage
+			}
 			return cmd, err
 		}
 		cmd.Args = fs.Args()
@@ -101,9 +107,13 @@ func Parse(args []string) (Command, error) {
 
 	case "login":
 		fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
+		fs.Usage = func() {}
 		email := fs.String("email", "", "email for authentication")
 		token := fs.String("token", "", "API token for authentication")
 		if err := fs.Parse(tail); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return cmd, ErrUsage
+			}
 			return cmd, err
 		}
 		if *email != "" {
@@ -117,7 +127,11 @@ func Parse(args []string) (Command, error) {
 
 	case "doctor":
 		fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
+		fs.Usage = func() {}
 		if err := fs.Parse(tail); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return cmd, ErrUsage
+			}
 			return cmd, err
 		}
 		cmd.Args = fs.Args()
@@ -125,8 +139,12 @@ func Parse(args []string) (Command, error) {
 
 	case "update":
 		fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
+		fs.Usage = func() {}
 		from := fs.String("from", "", "swap from a pre-downloaded temp file")
 		if err := fs.Parse(tail); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return cmd, ErrUsage
+			}
 			return cmd, err
 		}
 		if *from != "" {
@@ -137,7 +155,6 @@ func Parse(args []string) (Command, error) {
 
 	default:
 		// Unknown subcommand — pass through for consumer to handle.
-		cmd.Name = args[0]
 		cmd.Args = tail
 		return cmd, nil
 	}

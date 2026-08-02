@@ -50,7 +50,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	entries, _ := os.ReadDir(targetDir)
+	entries, err := os.ReadDir(targetDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading directory: %v\n", err)
+		os.Exit(1)
+	}
 	if len(entries) > 0 {
 		fmt.Fprintf(os.Stderr, "Error: %s is not empty\n", targetDir)
 		os.Exit(1)
@@ -72,6 +76,11 @@ func main() {
 
 	if err := scaffoldScripts(targetDir, subs); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if _, err := exec.LookPath("go"); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: go is not installed. Install Go from https://go.dev/dl/\n")
 		os.Exit(1)
 	}
 
@@ -98,7 +107,10 @@ func scaffoldProject(targetDir string, subs map[string]string) error {
 			return err
 		}
 
-		rel, _ := filepath.Rel("templates/project", path)
+		rel, err := filepath.Rel("templates/project", path)
+		if err != nil {
+			return fmt.Errorf("compute relative path: %w", err)
+		}
 		if rel == "." {
 			return nil
 		}
@@ -130,6 +142,10 @@ func scaffoldProject(targetDir string, subs map[string]string) error {
 			return fmt.Errorf("write %s: %w", targetPath, err)
 		}
 
+		if filepath.Ext(targetPath) == ".sh" || filepath.Ext(targetPath) == ".ps1" {
+			os.Chmod(targetPath, 0755)
+		}
+
 		return nil
 	})
 }
@@ -140,7 +156,10 @@ func scaffoldScripts(targetDir string, subs map[string]string) error {
 			return err
 		}
 
-		rel, _ := filepath.Rel("templates/scripts", path)
+		rel, err := filepath.Rel("templates/scripts", path)
+		if err != nil {
+			return fmt.Errorf("compute relative path: %w", err)
+		}
 		if rel == "." {
 			return nil
 		}
@@ -165,6 +184,10 @@ func scaffoldScripts(targetDir string, subs map[string]string) error {
 
 		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("write %s: %w", targetPath, err)
+		}
+
+		if filepath.Ext(targetPath) == ".sh" || filepath.Ext(targetPath) == ".ps1" {
+			os.Chmod(targetPath, 0755)
 		}
 
 		return nil

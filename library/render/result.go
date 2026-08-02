@@ -43,7 +43,7 @@ func errorResult(e Error) *mcp.CallToolResult {
 	doc := Document{Front: front, Body: body, IsError: true}
 	text, err := doc.String()
 	if err != nil {
-		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n---\n## Error\n\n%s\n", e.Code, e.Message, e.Message)
+		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n---\n## Error\n\n%s\n\n%s\n", e.Code, e.Message, e.Message, e.Hint)
 	}
 
 	return &mcp.CallToolResult{

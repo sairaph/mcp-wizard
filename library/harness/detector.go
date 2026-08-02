@@ -129,7 +129,7 @@ func (d *Detector) PlanResults(ctx context.Context, ids []ID, desired DesiredSta
 			Name:      ch.Name,
 			Path:      ch.Path,
 			Desired:   desired,
-			State:     string(ch.State),
+			State:     ApplyState(ch.State),
 			Action:    ch.Action,
 			Reason:    ch.Reason,
 		}

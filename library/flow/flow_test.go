@@ -17,22 +17,32 @@ type mockState struct {
 }
 
 type mockStep[T any] struct {
-	id    string
-	title string
+	id       string
+	title    string
+	updateFn func(msg tea.Msg, state *T) (flow.Directive, tea.Cmd)
 }
 
-func (m *mockStep[T]) ID() string                                        { return m.id }
-func (m *mockStep[T]) Title(state *T) string                              { return m.title }
-func (m *mockStep[T]) Hints(state *T) []struct{ Key, Label string }       { return nil }
-func (m *mockStep[T]) Init(state *T) tea.Cmd                              { return nil }
-func (m *mockStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) { return flow.Continue, nil }
-func (m *mockStep[T]) View(state *T) string                               { return "" }
+func (m *mockStep[T]) ID() string                                          { return m.id }
+func (m *mockStep[T]) Title(state *T) string                               { return m.title }
+func (m *mockStep[T]) Hints(state *T) []struct{ Key, Label string }        { return nil }
+func (m *mockStep[T]) Init(state *T) tea.Cmd                               { return nil }
+func (m *mockStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
+	if m.updateFn != nil {
+		return m.updateFn(msg, state)
+	}
+	return flow.Continue, nil
+}
+func (m *mockStep[T]) View(state *T) string                                { return "" }
 
 func TestNewFlowEmptySteps(t *testing.T) {
 	f := flow.New([]flow.Step[int]{}, nil)
 	m := f.Model()
 	if m == nil {
 		t.Fatal("Model() returned nil")
+	}
+	cmd := m.Init()
+	if cmd == nil {
+		t.Fatal("expected a quit command from Init on empty steps")
 	}
 }
 
@@ -158,4 +168,21 @@ func TestBaseStateGetBaseState(t *testing.T) {
 	if got := bs.GetBaseState(); got != bs {
 		t.Fatal("GetBaseState did not return itself")
 	}
+}
+
+func TestFlowModel_Update(t *testing.T) {
+	called := false
+	step := &mockStep[mockState]{}
+	step.updateFn = func(msg tea.Msg, state *mockState) (flow.Directive, tea.Cmd) {
+		called = true
+		return flow.Quit, nil
+	}
+	f := flow.New[mockState]([]flow.Step[mockState]{step}, &mockState{})
+	m := f.Model()
+	m.Init()
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes})
+	if !called {
+		t.Fatal("step.Update was not called")
+	}
+	_ = cmd
 }

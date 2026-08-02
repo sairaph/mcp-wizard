@@ -18,7 +18,7 @@ type Version struct {
 
 // Parse parses a semantic version string (e.g., "0.4.0", "1.2.3-rc1").
 func Parse(s string) (Version, error) {
-	s = strings.TrimPrefix(s, "v")
+	s = strings.TrimLeft(s, "vV")
 	if s == "" {
 		return Version{}, fmt.Errorf("empty version string")
 	}

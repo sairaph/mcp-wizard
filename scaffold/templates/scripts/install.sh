@@ -51,7 +51,11 @@ download_failed() {
 if command -v curl >/dev/null 2>&1; then
   curl -fSL --progress-bar "$URL" -o "$TEMP" 2>"$TEMP.err" || download_failed "$(cat "$TEMP.err" 2>/dev/null | tr '\n' ' ')"
 elif command -v wget >/dev/null 2>&1; then
-  wget -q --show-progress -O "$TEMP" "$URL" 2>"$TEMP.err" || download_failed "$(cat "$TEMP.err" 2>/dev/null | tr '\n' ' ')"
+  if ! wget -q --show-progress -O "$TEMP" "$URL" 2>"$TEMP.err"; then
+    if ! wget -q -O "$TEMP" "$URL" 2>"$TEMP.err"; then
+      download_failed "$(cat "$TEMP.err" 2>/dev/null | tr '\n' ' ')"
+    fi
+  fi
 else
   download_failed "neither curl nor wget is available"
 fi
@@ -59,11 +63,16 @@ rm -f "$TEMP.err"
 
 if command -v sha256sum >/dev/null 2>&1; then
   CHECKSUM_URL="${URL%/*}/SHA256SUMS.txt"
-  EXPECTED=$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null | grep " $ASSET\$" | awk '{print $1}')
+  EXPECTED=""
+  if command -v curl >/dev/null 2>&1; then
+    EXPECTED=$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null | grep " $ASSET\$" | awk '{print $1}')
+  elif command -v wget >/dev/null 2>&1; then
+    EXPECTED=$(wget -q -O - "$CHECKSUM_URL" 2>/dev/null | grep " $ASSET\$" | awk '{print $1}')
+  fi
   if [ -n "$EXPECTED" ]; then
     ACTUAL=$(sha256sum "$TEMP" | awk '{print $1}')
     if [ "$EXPECTED" != "$ACTUAL" ]; then
-      printf '\n  SHA256 mismatch. Expected %s, got %s.\n' "$EXPECTED" "$ACTUAL" >&2
+      printf '\n  SHA256 mismatch.\n' >&2
       exit 1
     fi
   fi

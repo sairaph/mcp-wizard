@@ -106,7 +106,7 @@ type Change struct {
 	Name      string       `json:"name"`
 	Path      string       `json:"path,omitempty"`
 	Desired   DesiredState `json:"desired"`
-	State     string       `json:"state"`
+	State     ApplyState   `json:"state"`
 	Action    string       `json:"action,omitempty"`
 	Reason    string       `json:"reason,omitempty"`
 }

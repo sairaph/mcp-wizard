@@ -10,6 +10,9 @@ func Paginate[T any](records []T, requestedPage, tokenLimit int, render func([]T
 	if len(records) == 0 {
 		return nil, 0, nil
 	}
+	if tokenLimit <= 0 {
+		tokenLimit = 1
+	}
 	starts := []int{0}
 	start := 0
 	for end := 1; end <= len(records); end++ {

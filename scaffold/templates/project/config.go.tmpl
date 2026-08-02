@@ -1,6 +1,10 @@
 package main
 
-import "runtime"
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+)
 
 var version = "0.1.0"
 
@@ -9,23 +13,31 @@ type Config struct {
 }
 
 func configDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
 	switch runtime.GOOS {
 	case "linux":
-		return "${HOME}/.config/${BinaryName}"
+		return filepath.Join(home, ".config", "${BinaryName}")
 	case "darwin":
-		return "${HOME}/Library/Application Support/${BinaryName}"
+		return filepath.Join(home, "Library", "Application Support", "${BinaryName}")
 	default:
-		return "${HOME}/.${BinaryName}"
+		return filepath.Join(home, ".${BinaryName}")
 	}
 }
 
 func dataDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
 	switch runtime.GOOS {
 	case "linux":
-		return "${HOME}/.local/share/${BinaryName}"
+		return filepath.Join(home, ".local", "share", "${BinaryName}")
 	case "darwin":
-		return "${HOME}/Library/Application Support/${BinaryName}"
+		return filepath.Join(home, "Library", "Application Support", "${BinaryName}")
 	default:
-		return "${HOME}/.${BinaryName}"
+		return filepath.Join(home, ".${BinaryName}")
 	}
 }

@@ -33,10 +33,10 @@ func (d Document) String() (string, error) {
 	if d.Front != nil {
 		enc := yaml.NewEncoder(&buf)
 		enc.SetIndent(2)
+		defer enc.Close()
 		if err := enc.Encode(d.Front); err != nil {
 			return "", fmt.Errorf("render frontmatter: %w", err)
 		}
-		enc.Close()
 	}
 	buf.WriteString("---")
 	if d.Body != "" {
@@ -45,7 +45,7 @@ func (d Document) String() (string, error) {
 	}
 	buf.WriteString("\n")
 
-	if buf.Len() > MaxBytes {
+	if buf.Len() >= MaxBytes {
 		return "", fmt.Errorf("render: document exceeds %d bytes", MaxBytes)
 	}
 	return buf.String(), nil

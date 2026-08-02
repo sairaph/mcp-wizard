@@ -1,6 +1,10 @@
 package mcpserver
 
-import "os"
+import (
+	"os"
+
+	"${ModulePath}/internal/app"
+)
 
 func ConfigFromEnv() Config {
 	return Config{
@@ -9,6 +13,8 @@ func ConfigFromEnv() Config {
 	}
 }
 
-func appConfigFromEnv() Config {
-	return Config{}
+func appConfigFromEnv() app.Config {
+	return app.Config{
+		Version: version,
+	}
 }

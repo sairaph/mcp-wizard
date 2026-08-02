@@ -46,8 +46,15 @@ func New(checks ...Check) *Runner {
 // Run executes all checks and writes formatted output to w.
 // Returns 0 if no Fail results, 1 otherwise.
 func (r *Runner) Run(ctx context.Context, w io.Writer) int {
+	if r == nil || w == nil {
+		return 1
+	}
 	exitCode := 0
 	for _, check := range r.checks {
+		if err := ctx.Err(); err != nil {
+			fmt.Fprintf(w, "  [%s] %s\n", "fail", "cancelled")
+			return 1
+		}
 		result := check.Run(ctx)
 		var statusStr string
 		switch result.Status {

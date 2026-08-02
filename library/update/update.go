@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -32,25 +33,25 @@ func Check(ctx context.Context, opts Options) (latest string, available bool, er
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", opts.Owner, opts.Repo)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", false, nil
+		return "", false, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", false, nil
+		return "", false, fmt.Errorf("http request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", false, nil
+		return "", false, fmt.Errorf("GitHub API: HTTP %d", resp.StatusCode)
 	}
 
 	var release struct {
 		TagName string `json:"tag_name"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", false, nil
+		return "", false, fmt.Errorf("decode response: %w", err)
 	}
 
 	latest = strings.TrimPrefix(release.TagName, "v")
@@ -60,12 +61,12 @@ func Check(ctx context.Context, opts Options) (latest string, available bool, er
 
 	current, err := Parse(opts.CurrentVersion)
 	if err != nil {
-		return latest, true, nil // can't parse current — just report latest
+		return latest, false, nil
 	}
 
 	latestV, err := Parse(latest)
 	if err != nil {
-		return latest, true, nil
+		return latest, false, nil
 	}
 
 	return latest, latestV.Compare(current) > 0, nil
@@ -76,6 +77,9 @@ func Check(ctx context.Context, opts Options) (latest string, available bool, er
 // into place) because Windows allows renaming a running executable but not
 // deleting it.
 func SelfUpdate(ctx context.Context, opts Options) error {
+	if opts.InstallDir == "" {
+		return fmt.Errorf("InstallDir must not be empty")
+	}
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 	assetName := opts.AssetName(osName, arch)
@@ -98,7 +102,13 @@ func SelfUpdate(ctx context.Context, opts Options) error {
 		return fmt.Errorf("create temp file: %w", err)
 	}
 
-	resp, err := http.Get(downloadURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	if err != nil {
+		_ = f.Close()
+		_ = os.Remove(tempFile)
+		return fmt.Errorf("create download request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		_ = f.Close()
 		_ = os.Remove(tempFile)
@@ -123,7 +133,7 @@ func SelfUpdate(ctx context.Context, opts Options) error {
 	downloadedHash := hex.EncodeToString(hash.Sum(nil))
 
 	// Verify SHA256 if checksum file is available.
-	if err := verifyChecksum(checksumURL, assetName, downloadedHash); err != nil {
+	if err := verifyChecksum(ctx, checksumURL, assetName, downloadedHash); err != nil {
 		_ = os.Remove(tempFile)
 		return err
 	}
@@ -156,6 +166,9 @@ func SelfUpdate(ctx context.Context, opts Options) error {
 // SwapFrom performs the swap when the install script has already downloaded
 // the binary to a temp file. Used for the `<bin> update --from <tempfile>` path.
 func SwapFrom(ctx context.Context, tempPath string, opts Options) error {
+	if err := os.Chmod(tempPath, 0755); err != nil {
+		return fmt.Errorf("chmod temp binary: %w", err)
+	}
 	target := filepath.Join(opts.InstallDir, filepath.Base(opts.AssetName(runtime.GOOS, runtime.GOARCH)))
 	if err := swapFile(tempPath, target); err != nil {
 		return fmt.Errorf("swap from temp: %w", err)
@@ -163,8 +176,12 @@ func SwapFrom(ctx context.Context, tempPath string, opts Options) error {
 	return nil
 }
 
-func verifyChecksum(checksumURL, assetName, downloadedHash string) error {
-	resp, err := http.Get(checksumURL)
+func verifyChecksum(ctx context.Context, checksumURL, assetName, downloadedHash string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumURL, nil)
+	if err != nil {
+		return nil // checksum unavailable — non-fatal
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil // checksum unavailable — non-fatal
 	}
@@ -226,10 +243,11 @@ func swapFile(source, target string) error {
 }
 
 func randString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, n)
+	rand.Read(b)
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	for i := range b {
-		b[i] = letters[i%len(letters)]
+		b[i] = letters[int(b[i])%len(letters)]
 	}
 	return string(b)
 }

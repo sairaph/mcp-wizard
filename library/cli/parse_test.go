@@ -131,8 +131,8 @@ func TestParseInstallHelp(t *testing.T) {
 	if !errors.Is(err, cli.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
-	if cmd.Name != "help" {
-		t.Errorf("expected name=help, got %q", cmd.Name)
+	if cmd.Name != "install" {
+		t.Errorf("expected name=install, got %q", cmd.Name)
 	}
 }
 
