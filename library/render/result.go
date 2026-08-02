@@ -46,7 +46,7 @@ func errorResult(e Error) *mcp.CallToolResult {
 	if err != nil {
 		safeMsg := strings.ReplaceAll(e.Message, "\n", "\\n")
 		safeHint := strings.ReplaceAll(e.Hint, "\n", "\\n")
-		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n---\n## Error\n\n%s\n\n%s\n", e.Code, safeMsg, safeMsg, safeHint)
+		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n---\n## Error\n\n%s\n\n%s\n", e.Code, safeMsg, e.Message, safeHint)
 	}
 
 	return &mcp.CallToolResult{

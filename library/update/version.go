@@ -30,16 +30,16 @@ func Parse(s string) (Version, error) {
 	}
 
 	major, err := strconv.Atoi(nums[0])
-	if err != nil {
-		return Version{}, fmt.Errorf("invalid major version %q: %w", nums[0], err)
+	if err != nil || major < 0 {
+		return Version{}, fmt.Errorf("invalid major version %q", nums[0])
 	}
 	minor, err := strconv.Atoi(nums[1])
-	if err != nil {
-		return Version{}, fmt.Errorf("invalid minor version %q: %w", nums[1], err)
+	if err != nil || minor < 0 {
+		return Version{}, fmt.Errorf("invalid minor version %q", nums[1])
 	}
 	patch, err := strconv.Atoi(nums[2])
-	if err != nil {
-		return Version{}, fmt.Errorf("invalid patch version %q: %w", nums[2], err)
+	if err != nil || patch < 0 {
+		return Version{}, fmt.Errorf("invalid patch version %q", nums[2])
 	}
 
 	v := Version{Major: major, Minor: minor, Patch: patch}
@@ -101,13 +101,16 @@ func cmp(a, b int) int {
 
 func comparePreRelease(a, b []string) int {
 	for i := 0; i < len(a) && i < len(b); i++ {
-		// Compare numeric identifiers as numbers, others as strings.
 		ai, errA := strconv.Atoi(a[i])
 		bi, errB := strconv.Atoi(b[i])
 		if errA == nil && errB == nil {
 			if c := cmp(ai, bi); c != 0 {
 				return c
 			}
+		} else if errA == nil && errB != nil {
+			return -1 // numeric < non-numeric per semver spec
+		} else if errA != nil && errB == nil {
+			return 1  // non-numeric > numeric per semver spec
 		} else {
 			if a[i] < b[i] {
 				return -1

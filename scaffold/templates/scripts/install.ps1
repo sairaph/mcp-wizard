@@ -13,7 +13,7 @@ function Get-Arch {
   switch ($arch) {
     { $_ -in 'AMD64','x64' } { return 'amd64' }
     'ARM64'                  { return 'arm64' }
-    default                  { Write-Host "  Unsupported architecture: $arch" -ForegroundColor Red; return }
+    default                  { Write-Host "  Unsupported architecture: $arch" -ForegroundColor Red; exit 1 }
   }
 }
 
@@ -49,11 +49,11 @@ if (-not (Test-Path "$target.new")) {
 }
 
 # Verify SHA256 checksum
-$checksumUrl = "$url/../SHA256SUMS.txt"
+$checksumUrl = $url.Substring(0, $url.LastIndexOf('/')) + '/SHA256SUMS.txt'
 try {
     $checksums = (Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing).Content
-    $pattern = ' ' + [regex]::Escape($assetName) + '$'
-    $expectedHash = ($checksums -split "`n" | Where-Object { $_ -match $pattern }) -split ' ' | Select-Object -First 1
+    $pattern = ' ' + [regex]::Escape($assetName) + '\s*$'
+    $expectedHash = ($checksums -split "`n" | ForEach-Object { $_.TrimEnd("`r") } | Where-Object { $_ -match $pattern }) -split ' ' | Select-Object -First 1
     if ($expectedHash) {
         $actualHash = (Get-FileHash -Path "$target.new" -Algorithm SHA256).Hash.ToLower()
         if ($expectedHash.ToLower() -ne $actualHash) {
@@ -67,7 +67,13 @@ try {
 # Swap the new binary into place using move-aside
 $oldTarget = "$target.old-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
 if (Test-Path $target) {
-    Move-Item $target $oldTarget -Force
+    try {
+        Move-Item $target $oldTarget -Force
+    } catch {
+        Write-Host "  Could not replace binary. Close any running processes and retry." -ForegroundColor Red
+        Remove-Item "$target.new" -ErrorAction SilentlyContinue
+        exit 1
+    }
 }
 try {
     Move-Item "$target.new" $target -Force

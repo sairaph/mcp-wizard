@@ -65,7 +65,7 @@ func TestPrintResults(t *testing.T) {
 			},
 			enabling: true,
 			dryRun:   true,
-			want:     []string{"Claude Code", "would registered"},
+			want:     []string{"Claude Code", "would register"},
 			notWant:  []string{"applied"},
 		},
 		{

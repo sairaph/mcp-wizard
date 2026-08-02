@@ -173,7 +173,15 @@ func (s *harnessStep[T]) View(state *T) string {
 
 	hidden := len(hState.Detections) - len(indices)
 
-	content := tui.CheckboxList(tui.DefaultTheme, items, hState.Cursor, selected, selectable, statusFn, hState.ShowAll, hidden)
+	cursorPos := 0
+	for i, idx := range indices {
+		if idx == hState.Cursor {
+			cursorPos = i
+			break
+		}
+	}
+
+	content := tui.CheckboxList(tui.DefaultTheme, items, cursorPos, selected, selectable, statusFn, hState.ShowAll, hidden)
 	content += "\n" + tui.Footer(tui.DefaultTheme, tui.Hints(tui.DefaultTheme,
 		tui.Hint{Key: "\u2191\u2193", Label: "move"},
 		tui.Hint{Key: "space", Label: "toggle"},

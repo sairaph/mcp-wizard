@@ -45,7 +45,7 @@ func (d Document) String() (string, error) {
 	}
 	buf.WriteString("\n")
 
-	if buf.Len() >= MaxBytes {
+	if buf.Len() > MaxBytes {
 		return "", fmt.Errorf("render: document exceeds %d bytes", MaxBytes)
 	}
 	return buf.String(), nil

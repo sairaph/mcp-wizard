@@ -173,13 +173,16 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 			case "down", "j":
 				lState.Cursor = 1 - lState.Cursor
 			case "enter":
-				if lState.Cursor == 1 || !s.config.Skippable {
+				if lState.Cursor == 0 {
 					lState.Stage = 0
 					lState.Input = ""
 					return flow.Continue, nil
 				}
-				lState.Skipped = true
-				return flow.Next, nil
+				if s.config.Skippable {
+					lState.Skipped = true
+					return flow.Next, nil
+				}
+				return flow.Quit, nil
 			case "esc":
 				if s.config.Skippable {
 					lState.Skipped = true
@@ -193,6 +196,9 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 		}
 
 		// Input screen.
+		if lState.Stage < 0 || lState.Stage >= len(s.config.Stages) {
+			return flow.Next, nil
+		}
 		stage := s.config.Stages[lState.Stage]
 		switch msg.String() {
 		case "enter":
@@ -236,8 +242,9 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 			return flow.Quit, nil
 
 		case "backspace":
-			if len(lState.Input) > 0 {
-				lState.Input = lState.Input[:len(lState.Input)-1]
+			runes := []rune(lState.Input)
+			if len(runes) > 0 {
+				lState.Input = string(runes[:len(runes)-1])
 			}
 
 		default:
@@ -277,7 +284,10 @@ func (s *loginStep[T]) View(state *T) string {
 
 	if lState.Stage == -1 {
 		// Sign in / Skip choice.
-		options := []string{"Sign in", "Skip for now"}
+		options := []string{"Sign in"}
+		if s.config.Skippable {
+			options = append(options, "Skip for now")
+		}
 		content = tui.ActionMenu(theme, lState.Cursor, options...)
 		content += "\n" + tui.Footer(theme, tui.Hints(theme,
 			tui.Hint{Key: "\u2191\u2193", Label: "move"},
@@ -289,7 +299,7 @@ func (s *loginStep[T]) View(state *T) string {
 		stage := s.config.Stages[lState.Stage]
 
 		masked := false
-		if lState.Stage < len(s.config.Stages) && len(stage.Fields) > 0 {
+		if len(stage.Fields) > 0 {
 			masked = stage.Fields[0].Masked
 		}
 

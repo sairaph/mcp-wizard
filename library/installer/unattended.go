@@ -34,7 +34,11 @@ func PrintResults(w io.Writer, results []harness.Result, enabling, dryRun bool) 
 			status = "failed: " + r.Reason
 		}
 		if dryRun {
-			status = "would " + verb
+			if enabling {
+				status = "would register"
+			} else {
+				status = "would remove"
+			}
 		}
 		fmt.Fprintf(w, "  %-22s %s\n", r.Name, status)
 	}

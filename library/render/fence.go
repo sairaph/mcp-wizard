@@ -54,6 +54,9 @@ func ProgressBar(done, total, width int) string {
 	if total <= 0 || width <= 2 {
 		return ""
 	}
+	if done < 0 {
+		done = 0
+	}
 	if done > total {
 		done = total
 	}

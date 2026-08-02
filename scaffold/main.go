@@ -61,6 +61,13 @@ func main() {
 	}
 
 	modulePath := fmt.Sprintf("github.com/%s/%s", *owner, *name)
+
+	// Check Go is available before writing any files.
+	if _, err := exec.LookPath("go"); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: go is not installed. Install Go from https://go.dev/dl/\n")
+		os.Exit(1)
+	}
+
 	subs := map[string]string{
 		"Name":       *name,
 		"Owner":      *owner,
@@ -76,11 +83,6 @@ func main() {
 
 	if err := scaffoldScripts(targetDir, subs); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	if _, err := exec.LookPath("go"); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: go is not installed. Install Go from https://go.dev/dl/\n")
 		os.Exit(1)
 	}
 
@@ -130,12 +132,7 @@ func scaffoldProject(targetDir string, subs map[string]string) error {
 
 		if filepath.Ext(path) == ".tmpl" {
 			targetPath = strings.TrimSuffix(targetPath, ".tmpl")
-			content = os.Expand(content, func(key string) string {
-				if v, ok := subs[key]; ok {
-					return v
-				}
-				return "${" + key + "}"
-			})
+			content = substituteBraced(content, subs)
 		}
 
 		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
@@ -177,12 +174,7 @@ func scaffoldScripts(targetDir string, subs map[string]string) error {
 			return fmt.Errorf("read %s: %w", path, err)
 		}
 
-		content := os.Expand(string(data), func(key string) string {
-			if v, ok := subs[key]; ok {
-				return v
-			}
-			return "${" + key + "}"
-		})
+		content := substituteBraced(string(data), subs)
 
 		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("write %s: %w", targetPath, err)
@@ -196,4 +188,34 @@ func scaffoldScripts(targetDir string, subs map[string]string) error {
 
 		return nil
 	})
+}
+
+// substituteBraced replaces ${key} patterns in s using subs, leaving
+// $var (unbraced) and ${{ ... }} (GitHub Actions / PowerShell) intact.
+func substituteBraced(s string, subs map[string]string) string {
+	var out strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '$' && i+2 < len(s) && s[i+1] == '{' {
+			if s[i+2] == '{' {
+				out.WriteString("${{")
+				i += 2
+				continue
+			}
+			end := strings.IndexByte(s[i+2:], '}')
+			if end < 0 {
+				out.WriteByte(s[i])
+				continue
+			}
+			key := s[i+2 : i+2+end]
+			if v, ok := subs[key]; ok {
+				out.WriteString(v)
+			} else {
+				out.WriteString("${" + key + "}")
+			}
+			i += 2 + end
+		} else {
+			out.WriteByte(s[i])
+		}
+	}
+	return out.String()
 }

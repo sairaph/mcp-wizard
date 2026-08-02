@@ -14,11 +14,12 @@ type Options struct {
 }
 
 func Run[T any](ctx context.Context, f *flow.Flow[T], opts Options) int {
-	if opts.Theme.Copy.Title == "" {
-		opts.Theme = DefaultTheme
-		if opts.Title != "" {
-			opts.Theme.Copy.Title = opts.Title
-		}
+	theme := opts.Theme
+	if theme.Copy.Title == "" || theme.Colors.Primary == "" {
+		theme = DefaultTheme
+	}
+	if opts.Title != "" {
+		theme.Copy.Title = opts.Title
 	}
 
 	model := f.Model()

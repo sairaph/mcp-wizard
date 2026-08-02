@@ -114,7 +114,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			base.Width = wm.Width
 			base.Height = wm.Height
 		}
-		return m, m.cmd
+		return m, nil
 	}
 
 	if _, ok := msg.(tea.QuitMsg); ok {
@@ -122,6 +122,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	directive, cmd := m.step.Update(msg, m.flow.state)
+	m.cmd = cmd
 
 	switch directive {
 	case Next:
@@ -129,24 +130,26 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.step = m.flow.steps[m.flow.current]
-		return m, m.step.Init(m.flow.state)
+		m.cmd = m.step.Init(m.flow.state)
+		return m, m.cmd
 
 	case Back:
 		if !m.flow.Retreat() {
 			return m, tea.Quit
 		}
 		m.step = m.flow.steps[m.flow.current]
-		return m, m.step.Init(m.flow.state)
+		m.cmd = m.step.Init(m.flow.state)
+		return m, m.cmd
 
 	// Skip advances to the next step without rendering the current one.
-	// The flowModel.Init method checks whether a step's Init returned a
-	// Directive (via type assertion) and handles Skip specially.
+	// This case is reached when a step's Update returns Skip.
 	case Skip:
 		if !m.flow.Advance() {
 			return m, tea.Quit
 		}
 		m.step = m.flow.steps[m.flow.current]
-		return m, m.step.Init(m.flow.state)
+		m.cmd = m.step.Init(m.flow.state)
+		return m, m.cmd
 
 	case Jump:
 		nextStep := ""
@@ -166,7 +169,8 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.step = m.flow.steps[m.flow.current]
-		return m, m.step.Init(m.flow.state)
+		m.cmd = m.step.Init(m.flow.state)
+		return m, m.cmd
 
 	case Quit:
 		return m, tea.Quit
