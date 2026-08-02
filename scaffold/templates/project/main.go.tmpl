@@ -1,0 +1,50 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+
+	"github.com/sairaph/mcp"
+	"github.com/sairaph/mcp/handlers"
+	"github.com/sairaph/mcp/transports"
+)
+
+func main() {
+	cfg := Config{
+		Transport: "stdio",
+	}
+
+	if v := os.Getenv("TRANSPORT"); v != "" {
+		cfg.Transport = v
+	}
+
+	srv := mcp.NewServer(mcp.ServerInfo{
+		Name:    "${ServerName}",
+		Version: version,
+	})
+
+	handlers.RegisterAll(srv, cfg)
+
+	var transport transports.Transport
+	switch cfg.Transport {
+	case "stdio":
+		transport = transports.NewStdio()
+	case "sse":
+		addr := os.Getenv("ADDR")
+		if addr == "" {
+			addr = ":8080"
+		}
+		transport = transports.NewSSE(addr)
+	default:
+		log.Fatalf("unknown transport: %s", cfg.Transport)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	log.Printf("${ServerName} starting on %s", cfg.Transport)
+	if err := srv.Serve(ctx, transport); err != nil {
+		log.Fatal(err)
+	}
+}

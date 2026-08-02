@@ -1,0 +1,35 @@
+# Binaries
+mcp-wizard
+mcp-wizard.exe
+scaffold/scaffold
+scaffold/scaffold.exe
+
+# Build output
+dist/
+/bin/
+
+# Test artifacts
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+*.new
+*.old-*
+wget-log

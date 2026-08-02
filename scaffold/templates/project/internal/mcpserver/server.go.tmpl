@@ -1,0 +1,38 @@
+package mcpserver
+
+import (
+	"github.com/sairaph/mcp"
+	"github.com/sairaph/mcp/handlers"
+	"github.com/sairaph/mcp/transports"
+	"${ModulePath}/internal/app"
+)
+
+func New(cfg Config) *mcp.Server {
+	srv := mcp.NewServer(mcp.ServerInfo{
+		Name:    "${ServerName}",
+		Version: cfg.Version,
+	})
+
+	appSvc := app.New(cfg.App)
+
+	registerTools(srv, appSvc)
+	registerResources(srv, appSvc)
+	registerPrompts(srv, appSvc)
+
+	return srv
+}
+
+type Config struct {
+	Version string
+	App     app.Config
+}
+
+func registerTools(srv *mcp.Server, svc *app.Service) {
+	handlers.RegisterTool(srv, "greet", svc.Greet)
+}
+
+func registerResources(srv *mcp.Server, svc *app.Service) {
+}
+
+func registerPrompts(srv *mcp.Server, svc *app.Service) {
+}

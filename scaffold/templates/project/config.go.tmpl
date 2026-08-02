@@ -1,0 +1,31 @@
+package main
+
+import "runtime"
+
+var version = "0.1.0"
+
+type Config struct {
+	Transport string
+}
+
+func configDir() string {
+	switch runtime.GOOS {
+	case "linux":
+		return "${HOME}/.config/${BinaryName}"
+	case "darwin":
+		return "${HOME}/Library/Application Support/${BinaryName}"
+	default:
+		return "${HOME}/.${BinaryName}"
+	}
+}
+
+func dataDir() string {
+	switch runtime.GOOS {
+	case "linux":
+		return "${HOME}/.local/share/${BinaryName}"
+	case "darwin":
+		return "${HOME}/Library/Application Support/${BinaryName}"
+	default:
+		return "${HOME}/.${BinaryName}"
+	}
+}

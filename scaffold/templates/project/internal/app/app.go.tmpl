@@ -1,0 +1,30 @@
+package app
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/sairaph/mcp/schema"
+	"${ModulePath}/internal/domain"
+)
+
+type Service struct {
+	cfg Config
+}
+
+func New(cfg Config) *Service {
+	return &Service{cfg: cfg}
+}
+
+func (s *Service) Greet(ctx context.Context, req schema.CallToolRequest) (schema.CallToolResult, error) {
+	name, _ := req.Arguments["name"].(string)
+	if name == "" {
+		name = "World"
+	}
+	greeting := domain.Greeting{Message: fmt.Sprintf("Hello, %s!", name)}
+	return schema.CallToolResult{
+		Content: []schema.Content{
+			schema.TextContent{Text: greeting.Message},
+		},
+	}, nil
+}
