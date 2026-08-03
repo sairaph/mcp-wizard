@@ -151,10 +151,10 @@ func Parse(args []string) (Command, error) {
 			}
 			return cmd, err
 		}
+		cmd.Args = fs.Args()
 		if *from != "" {
-			cmd.Args = append(cmd.Args, "--from", *from)
+			cmd.Args = append([]string{"--from", *from}, cmd.Args...)
 		}
-		cmd.Args = append(cmd.Args, fs.Args()...)
 		return cmd, nil
 
 	default:

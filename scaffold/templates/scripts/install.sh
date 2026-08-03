@@ -31,14 +31,6 @@ printf '\n  %s installer\n\n  Downloading %s...\n' "$BIN" "$ASSET"
 TEMP="${TARGET}.new"
 trap 'rm -f "$TEMP" "$TEMP.err"' EXIT HUP INT TERM
 
-temp_size() {
-  if [ -f "$TEMP" ]; then
-    wc -c < "$TEMP" 2>/dev/null || echo 0
-  else
-    echo 0
-  fi
-}
-
 download_failed() {
   printf '\n  Download failed. Please check your connection and try again.\n' >&2
   printf '  URL: %s\n' "$URL" >&2
@@ -62,20 +54,28 @@ fi
 rm -f "$TEMP.err"
 
 if command -v sha256sum >/dev/null 2>&1; then
-  CHECKSUM_URL="${URL%/*}/SHA256SUMS.txt"
-  EXPECTED=""
-  if command -v curl >/dev/null 2>&1; then
-    EXPECTED=$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null | grep " $ASSET\$" | awk '{print $1}')
-  elif command -v wget >/dev/null 2>&1; then
-    EXPECTED=$(wget -q -O - "$CHECKSUM_URL" 2>/dev/null | grep " $ASSET\$" | awk '{print $1}')
-  fi
-  if [ -n "$EXPECTED" ]; then
-    ACTUAL=$(sha256sum "$TEMP" | awk '{print $1}')
-    if [ "$EXPECTED" != "$ACTUAL" ]; then
-      printf '\n  SHA256 mismatch.\n' >&2
-      exit 1
+    SHA256_CMD="sha256sum"
+elif command -v shasum >/dev/null 2>&1; then
+    SHA256_CMD="shasum -a 256"
+else
+    SHA256_CMD=""
+fi
+
+if [ -n "$SHA256_CMD" ]; then
+    CHECKSUM_URL="${URL%/*}/SHA256SUMS.txt"
+    EXPECTED=""
+    if command -v curl >/dev/null 2>&1; then
+        EXPECTED=$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null | grep " $ASSET\$" | awk '{print $1}')
+    elif command -v wget >/dev/null 2>&1; then
+        EXPECTED=$(wget -q -O - "$CHECKSUM_URL" 2>/dev/null | grep " $ASSET\$" | awk '{print $1}')
     fi
-  fi
+    if [ -n "$EXPECTED" ]; then
+        ACTUAL=$($SHA256_CMD "$TEMP" | awk '{print $1}')
+        if [ "$EXPECTED" != "$ACTUAL" ]; then
+            printf '\n  SHA256 mismatch.\n' >&2
+            exit 1
+        fi
+    fi
 fi
 
 if [ ! -s "$TEMP" ]; then

@@ -98,7 +98,11 @@ func Truncate(text string, tokenLimit, byteLimit int) (prefix string, tokens int
 		return "", 0, false, errors.New("token budget input is not valid UTF-8")
 	}
 	if tokenLimit <= 0 && byteLimit <= 0 {
-		return text, 0, false, nil
+		n, err := Count(text)
+		if err != nil {
+			return "", 0, false, err
+		}
+		return text, n, false, nil
 	}
 	if tokenLimit <= 0 {
 		tokenLimit = math.MaxInt
@@ -141,10 +145,8 @@ func Truncate(text string, tokenLimit, byteLimit int) (prefix string, tokens int
 	}
 
 	truncated = true
-	if len(pieces) < tokenLimit {
-		tokenLimit = len(pieces)
-	}
-	prefix = validPrefix(strings.Join(pieces[:tokenLimit], ""), len(candidate))
+	safeLimit := min(tokenLimit, len(pieces))
+	prefix = validPrefix(strings.Join(pieces[:safeLimit], ""), len(candidate))
 	tokens, err = enc.Count(prefix)
 	if err != nil {
 		return "", 0, false, err

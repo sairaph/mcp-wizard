@@ -7,7 +7,7 @@ import (
 )
 
 func StepIndicator(current, total int, names []string) string {
-	if total <= 0 || len(names) == 0 {
+	if total <= 0 || len(names) == 0 || current >= total || current < 0 {
 		return ""
 	}
 	name := ""

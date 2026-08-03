@@ -14,6 +14,9 @@ type Spec struct {
 
 // Usage writes help text listing the available subcommands.
 func Usage(w io.Writer, specs []Spec) {
+	if w == nil {
+		return
+	}
 	maxLen := 0
 	for _, spec := range specs {
 		if l := len(spec.Name); l > maxLen {

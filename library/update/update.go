@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"time"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // Options controls the self-update behaviour.
@@ -24,6 +26,7 @@ type Options struct {
 	AssetName      func(os, arch string) string // maps "linux"/"amd64" to asset name
 	DaemonStop     func() error                 // optional: stop daemon before swap
 	InstallDir     string // where the binary lives (for swap)
+	BinaryName     string // installed binary filename
 	TempDir        string // temp directory for downloads (empty = os.TempDir)
 }
 
@@ -57,17 +60,17 @@ func Check(ctx context.Context, opts Options) (latest string, available bool, er
 
 	latest = strings.TrimPrefix(release.TagName, "v")
 	if latest == "" {
-		return "", false, nil
+		return "", false, fmt.Errorf("release tag is empty")
 	}
 
 	current, err := Parse(opts.CurrentVersion)
 	if err != nil {
-		return latest, false, nil
+		return "", false, fmt.Errorf("unparseable current version %q: %w", opts.CurrentVersion, err)
 	}
 
 	latestV, err := Parse(latest)
 	if err != nil {
-		return latest, false, nil
+		return latest, false, fmt.Errorf("unparseable latest version %q: %w", latest, err)
 	}
 
 	return latest, latestV.Compare(current) > 0, nil
@@ -80,6 +83,12 @@ func Check(ctx context.Context, opts Options) (latest string, available bool, er
 func SelfUpdate(ctx context.Context, opts Options) error {
 	if opts.InstallDir == "" {
 		return fmt.Errorf("InstallDir must not be empty")
+	}
+	if opts.BinaryName == "" {
+		return fmt.Errorf("BinaryName must not be empty")
+	}
+	if opts.AssetName == nil {
+		return fmt.Errorf("AssetName function must not be nil")
 	}
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
@@ -97,39 +106,39 @@ func SelfUpdate(ctx context.Context, opts Options) error {
 	}
 
 	// Download binary.
-	tempFile := filepath.Join(tempDir, assetName+".download")
-	f, err := os.Create(tempFile)
+	tempF, err := os.CreateTemp(tempDir, assetName+".*.download")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
+	tempFile := tempF.Name()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
-		_ = f.Close()
+		_ = tempF.Close()
 		_ = os.Remove(tempFile)
 		return fmt.Errorf("create download request: %w", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		_ = f.Close()
+		_ = tempF.Close()
 		_ = os.Remove(tempFile)
 		return fmt.Errorf("download: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		_ = f.Close()
+		_ = tempF.Close()
 		_ = os.Remove(tempFile)
 		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
 	}
 
 	hash := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(f, hash), resp.Body); err != nil {
-		_ = f.Close()
+	if _, err := io.Copy(io.MultiWriter(tempF, hash), resp.Body); err != nil {
+		_ = tempF.Close()
 		_ = os.Remove(tempFile)
 		return fmt.Errorf("download write: %w", err)
 	}
-	if err := f.Close(); err != nil {
+	if err := tempF.Close(); err != nil {
 		_ = os.Remove(tempFile)
 		return fmt.Errorf("close downloaded file: %w", err)
 	}
@@ -157,24 +166,38 @@ func SelfUpdate(ctx context.Context, opts Options) error {
 	}
 
 	// Swap into place.
-	target := filepath.Join(opts.InstallDir, filepath.Base(assetName))
+	target := filepath.Join(opts.InstallDir, opts.BinaryName)
 	if err := swapFile(tempFile, target); err != nil {
 		_ = os.Remove(tempFile)
 		return fmt.Errorf("swap binary: %w", err)
 	}
 
-	_ = os.Remove(tempFile)
+	// After swapFile succeeds, the temp file no longer exists.
+	// No cleanup needed.
 	return nil
 }
 
 // SwapFrom performs the swap when the install script has already downloaded
 // the binary to a temp file. Used for the `<bin> update --from <tempfile>` path.
 func SwapFrom(ctx context.Context, tempPath string, opts Options) error {
+	if opts.AssetName == nil {
+		return fmt.Errorf("AssetName function must not be nil")
+	}
+	if opts.BinaryName == "" {
+		return fmt.Errorf("BinaryName must not be empty")
+	}
+	if opts.InstallDir == "" {
+		return fmt.Errorf("InstallDir must not be empty")
+	}
+	assetName := opts.AssetName(runtime.GOOS, runtime.GOARCH)
+	if assetName == "" {
+		return fmt.Errorf("no asset name for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
 	defer os.Remove(tempPath)
 	if err := os.Chmod(tempPath, 0755); err != nil {
 		return fmt.Errorf("chmod temp binary: %w", err)
 	}
-	target := filepath.Join(opts.InstallDir, filepath.Base(opts.AssetName(runtime.GOOS, runtime.GOARCH)))
+	target := filepath.Join(opts.InstallDir, opts.BinaryName)
 	if err := swapFile(tempPath, target); err != nil {
 		return fmt.Errorf("swap from temp: %w", err)
 	}
@@ -211,7 +234,8 @@ func verifyChecksum(ctx context.Context, checksumURL, assetName, downloadedHash 
 		if len(parts) != 2 {
 			continue
 		}
-		if parts[1] == assetName {
+		filename := strings.TrimPrefix(parts[1], "*")
+		if filename == assetName {
 			if parts[0] != downloadedHash {
 				return fmt.Errorf("SHA256 mismatch: expected %s, got %s", parts[0], downloadedHash)
 			}
@@ -229,21 +253,69 @@ func swapFile(source, target string) error {
 
 	// On Unix, os.Rename is atomic when source and target are on the same FS.
 	// On Windows, we use move-aside: rename old binary, move new into place.
+	var oldTarget string
 	if runtime.GOOS == "windows" {
-		// Move old binary aside with a unique name.
 		if _, err := os.Stat(target); err == nil {
-			oldTarget := target + ".old-" + randString(8)
+			oldTarget = target + ".old-" + randString(8)
 			if err := os.Rename(target, oldTarget); err != nil {
 				return fmt.Errorf("move aside old binary: %w", err)
 			}
-			// Best-effort cleanup of old files.
-			defer os.Remove(oldTarget)
 		}
 	}
+	if oldTarget != "" {
+		defer os.Remove(oldTarget)
+	}
 
-	if err := os.Rename(source, target); err != nil {
+	err := os.Rename(source, target)
+	if err != nil {
+		// If the rename failed and we moved the old binary aside, restore it.
+		if oldTarget != "" {
+			os.Rename(oldTarget, target) // best-effort restore
+		}
+		if errors.Is(err, syscall.EXDEV) {
+			if err := copyFile(source, target); err != nil {
+				return fmt.Errorf("copy binary across devices: %w", err)
+			}
+			os.Remove(source)
+			return nil
+		}
 		return fmt.Errorf("rename: %w", err)
 	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		in.Close()
+		return err
+	}
+
+	// Clean up partial output on failure.
+	cleanup := true
+	defer func() {
+		out.Close()
+		if cleanup {
+			os.Remove(dst)
+		}
+	}()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	if err := out.Chmod(0755); err != nil {
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		return err
+	}
+	cleanup = false
 	return nil
 }
 

@@ -19,20 +19,29 @@ func CheckboxList(theme Theme, items []CheckboxItem, cursor int, selected map[st
 		return out.String()
 	}
 
+	selectableFn := selectable
+	if selectableFn == nil {
+		selectableFn = func(i int) bool { return true }
+	}
+	statusFn := status
+	if statusFn == nil {
+		statusFn = func(i int) string { return "" }
+	}
+
 	for i, item := range items {
 		cur := " "
-		if i == cursor && selectable(i) {
+		if i == cursor && selectableFn(i) {
 			cur = s.Cursor.Render(">")
 		}
 		mark := s.Off.Render("\u25cb")
-		if !selectable(i) {
+		if !selectableFn(i) {
 			mark = s.Dim.Render("\u00b7")
 		} else if selected[item.ID] {
 			mark = s.On.Render("\u25cf")
 		}
-		line := fmt.Sprintf("%-22s %s", item.Name, s.Dim.Render(status(i)))
-		if !selectable(i) {
-			line = s.Dim.Render(fmt.Sprintf("%-22s ", item.Name)) + s.Hint.Render(status(i))
+		line := fmt.Sprintf("%-22s %s", item.Name, s.Dim.Render(statusFn(i)))
+		if !selectableFn(i) {
+			line = s.Dim.Render(fmt.Sprintf("%-22s ", item.Name)) + s.Hint.Render(statusFn(i))
 		}
 		fmt.Fprintf(&out, " %s %s %s\n", cur, mark, line)
 	}

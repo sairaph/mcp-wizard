@@ -14,7 +14,6 @@ import (
 // HarnessStepOptions controls the harness selection step.
 type HarnessStepOptions struct {
 	AllDetected     bool
-	AllHarnesses    bool
 	ConflictPolicy  harness.ConflictPolicy
 	ShowUnavailable bool
 }
@@ -29,8 +28,12 @@ type HarnessState struct {
 
 // HarnessStep returns a flow.Step that detects harnesses and lets the user
 // select which ones to register with.
-func HarnessStep[T any](detector *harness.Detector, stateFn func(*T) *HarnessState, opts HarnessStepOptions) flow.Step[T] {
+func HarnessStep[T any](ctx context.Context, detector *harness.Detector, stateFn func(*T) *HarnessState, opts HarnessStepOptions) flow.Step[T] {
+	if detector == nil {
+		panic("installer: HarnessStep requires a non-nil detector")
+	}
 	return &harnessStep[T]{
+		ctx:      ctx,
 		detector: detector,
 		stateFn:  stateFn,
 		opts:     opts,
@@ -38,6 +41,7 @@ func HarnessStep[T any](detector *harness.Detector, stateFn func(*T) *HarnessSta
 }
 
 type harnessStep[T any] struct {
+	ctx      context.Context
 	detector *harness.Detector
 	stateFn  func(*T) *HarnessState
 	opts     HarnessStepOptions
@@ -73,7 +77,7 @@ func (s *harnessStep[T]) Init(state *T) tea.Cmd {
 	return tea.Batch(
 		tui.Spinner(),
 		func() tea.Msg {
-			return detectedMsg{harnesses: s.detector.Detect(context.Background())}
+			return detectedMsg{harnesses: s.detector.Detect(s.ctx)}
 		},
 	)
 }

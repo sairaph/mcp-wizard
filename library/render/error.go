@@ -5,6 +5,8 @@ import (
 	"reflect"
 )
 
+var errorType = reflect.TypeOf((*error)(nil)).Elem()
+
 // Error is the structured error shape for MCP tool results.
 type Error struct {
 	Code    string         `yaml:"code"`
@@ -49,19 +51,23 @@ func Classify(err error, table []ErrorMapping) Error {
 		if mapping.Target != nil {
 			tv := reflect.ValueOf(mapping.Target)
 			if tv.Kind() == reflect.Ptr {
-				dbl := reflect.New(tv.Type())
-				if errors.As(err, dbl.Interface()) {
+				ptrType := reflect.PointerTo(tv.Type().Elem())
+				if !ptrType.Implements(errorType) {
+					continue
+				}
+				target := reflect.New(tv.Type())
+				if errors.As(err, target.Interface()) {
 					message := err.Error()
 					var fields map[string]any
-				if mapping.Extract != nil {
-					msg, f := mapping.Extract(err)
-					if msg != "" {
-						message = msg
+					if mapping.Extract != nil {
+						msg, f := mapping.Extract(err)
+						if msg != "" {
+							message = msg
+						}
+						if f != nil {
+							fields = f
+						}
 					}
-					if f != nil {
-						fields = f
-					}
-				}
 					return Error{
 						Code:    mapping.Code,
 						Message: message,

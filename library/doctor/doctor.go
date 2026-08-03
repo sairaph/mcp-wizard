@@ -51,8 +51,11 @@ func (r *Runner) Run(ctx context.Context, w io.Writer) int {
 	}
 	exitCode := 0
 	for _, check := range r.checks {
+		if check == nil {
+			continue
+		}
 		if err := ctx.Err(); err != nil {
-			fmt.Fprintf(w, "  [%s] %s\n", "fail", "cancelled")
+			fmt.Fprintf(w, "  [%s] %s\n", Fail, "cancelled")
 			return 1
 		}
 		result := check.Run(ctx)
@@ -65,6 +68,8 @@ func (r *Runner) Run(ctx context.Context, w io.Writer) int {
 		case Fail:
 			statusStr = fmt.Sprintf("[%s]", Fail)
 			exitCode = 1
+		default:
+			statusStr = "[?]"
 		}
 		fmt.Fprintf(w, "  %-6s %s\n", statusStr, result.Name)
 		if result.Detail != "" {
@@ -76,6 +81,9 @@ func (r *Runner) Run(ctx context.Context, w io.Writer) int {
 
 // Add appends checks to the runner.
 func (r *Runner) Add(checks ...Check) {
+	if r == nil {
+		return
+	}
 	r.checks = append(r.checks, checks...)
 }
 
@@ -161,9 +169,6 @@ func (c UpdateCheck) Run(ctx context.Context) Result {
 		return Result{Name: c.Name(), Status: Warn, Detail: fmt.Sprintf("check failed: %v", err)}
 	}
 	if !available {
-		if latest == "" {
-			return Result{Name: c.Name(), Status: Warn, Detail: "could not check for updates"}
-		}
 		// Verify current version is parseable before claiming up-to-date.
 		if _, err := update.Parse(c.Opts.CurrentVersion); err != nil {
 			return Result{Name: c.Name(), Status: Warn, Detail: fmt.Sprintf("unparseable current version %q; latest is %s", c.Opts.CurrentVersion, latest)}

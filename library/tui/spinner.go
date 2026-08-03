@@ -15,6 +15,9 @@ func Spinner() tea.Cmd {
 }
 
 func SpinFrame(frame int) string {
+	if frame < 0 {
+		frame = 0
+	}
 	return spinFrames[frame%len(spinFrames)]
 }
 

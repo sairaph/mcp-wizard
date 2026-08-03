@@ -10,9 +10,10 @@ import (
 // Create it with New[T], then call Model() to get the tea.Model
 // for use with tea.NewProgram.
 type Flow[T any] struct {
-	steps   []Step[T]
-	current int
-	state   *T
+	steps       []Step[T]
+	current     int
+	state       *T
+	flowFailure error
 }
 
 // New creates a Flow with the given steps and initial state.
@@ -72,17 +73,22 @@ func (f *Flow[T]) Model() tea.Model {
 // The state type T must embed *BaseState for Failure detection;
 // otherwise, ExitCode always returns 0.
 func (f *Flow[T]) ExitCode() int {
+	if f.flowFailure != nil {
+		return 1
+	}
 	if f.state == nil {
 		return 0
 	}
-	base := f.getBaseState()
-	if base != nil && base.Failure != nil {
+	if base := f.getBaseState(); base != nil && base.Failure != nil {
 		return 1
 	}
 	return 0
 }
 
 func (f *Flow[T]) getBaseState() *BaseState {
+	if f.state == nil {
+		return nil
+	}
 	if b, ok := any(f.state).(interface{ GetBaseState() *BaseState }); ok {
 		return b.GetBaseState()
 	}
@@ -97,87 +103,124 @@ func (b *BaseState) GetBaseState() *BaseState { return b }
 type flowModel[T any] struct {
 	flow *Flow[T]
 	step Step[T]
-	cmd  tea.Cmd
 }
 
 func (m *flowModel[T]) Init() tea.Cmd {
-	if len(m.flow.steps) == 0 {
+	if len(m.flow.steps) == 0 || m.flow.current < 0 || m.flow.current >= len(m.flow.steps) || m.flow.state == nil {
 		return tea.Quit
 	}
 	m.step = m.flow.steps[m.flow.current]
+	if m.step == nil {
+		return tea.Quit
+	}
 	return m.step.Init(m.flow.state)
 }
 
 func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.step == nil || m.flow.state == nil {
+		return m, tea.Quit
+	}
+	// Update base state dimensions on resize, then forward to step.
 	if wm, ok := msg.(tea.WindowSizeMsg); ok {
 		if base := m.flow.getBaseState(); base != nil {
 			base.Width = wm.Width
 			base.Height = wm.Height
 		}
-		return m, nil
 	}
 
 	if _, ok := msg.(tea.QuitMsg); ok {
-		return m, tea.Quit
+		directive, cmd := m.step.Update(msg, m.flow.state)
+		if directive == Fail {
+			if base := m.flow.getBaseState(); base != nil {
+				base.Failure = fmt.Errorf("flow: step %q returned Fail on quit", m.step.ID())
+			} else {
+				m.flow.flowFailure = fmt.Errorf("flow: step %q returned Fail on quit", m.step.ID())
+			}
+		}
+		return m, cmd
 	}
 
 	directive, cmd := m.step.Update(msg, m.flow.state)
-	m.cmd = cmd
 
 	switch directive {
 	case Next:
+		stepCmd := cmd
 		if !m.flow.Advance() {
 			return m, tea.Quit
 		}
 		m.step = m.flow.steps[m.flow.current]
-		m.cmd = m.step.Init(m.flow.state)
-		return m, m.cmd
-
-	case Back:
-		if !m.flow.Retreat() {
+		if m.step == nil {
 			return m, tea.Quit
 		}
+		initCmd := m.step.Init(m.flow.state)
+		return m, tea.Batch(stepCmd, initCmd)
+
+	case Back:
+		stepCmd := cmd
+		if !m.flow.Retreat() {
+			return m, stepCmd // return the step's cmd, don't discard it
+		}
 		m.step = m.flow.steps[m.flow.current]
-		m.cmd = m.step.Init(m.flow.state)
-		return m, m.cmd
+		if m.step == nil {
+			return m, tea.Quit
+		}
+		initCmd := m.step.Init(m.flow.state)
+		return m, tea.Batch(stepCmd, initCmd)
 
 	// Skip advances to the next step without rendering the current one.
 	// This case is reached when a step's Update returns Skip.
 	case Skip:
+		stepCmd := cmd
 		if !m.flow.Advance() {
 			return m, tea.Quit
 		}
 		m.step = m.flow.steps[m.flow.current]
-		m.cmd = m.step.Init(m.flow.state)
-		return m, m.cmd
+		if m.step == nil {
+			return m, tea.Quit
+		}
+		initCmd := m.step.Init(m.flow.state)
+		return m, tea.Batch(stepCmd, initCmd)
 
 	case Jump:
+		stepCmd := cmd
+		base := m.flow.getBaseState()
 		nextStep := ""
-		if base := m.flow.getBaseState(); base != nil {
+		if base != nil {
 			nextStep = base.NextStep
 		}
 		if nextStep == "" {
-			if base := m.flow.getBaseState(); base != nil {
+			if base != nil {
 				base.Failure = fmt.Errorf("flow: Jump directive used without setting NextStep")
+			} else {
+				m.flow.flowFailure = fmt.Errorf("flow: Jump directive used without setting NextStep")
 			}
 			return m, tea.Quit
 		}
 		if !m.flow.JumpTo(nextStep) {
-			if base := m.flow.getBaseState(); base != nil {
+			if base != nil {
 				base.Failure = fmt.Errorf("flow: no step with ID %q", nextStep)
+			} else {
+				m.flow.flowFailure = fmt.Errorf("flow: no step with ID %q", nextStep)
 			}
 			return m, tea.Quit
 		}
 		m.step = m.flow.steps[m.flow.current]
-		m.cmd = m.step.Init(m.flow.state)
-		return m, m.cmd
+		if m.step == nil {
+			return m, tea.Quit
+		}
+		initCmd := m.step.Init(m.flow.state)
+		return m, tea.Batch(stepCmd, initCmd)
 
 	case Quit:
 		return m, tea.Quit
 
 	case Fail:
-		if base := m.flow.getBaseState(); base != nil && base.Failure == nil {
-			base.Failure = fmt.Errorf("flow: step %q returned Fail without setting Failure", m.step.ID())
+		if base := m.flow.getBaseState(); base != nil {
+			if base.Failure == nil {
+				base.Failure = fmt.Errorf("flow: step %q returned Fail", m.step.ID())
+			}
+		} else {
+			m.flow.flowFailure = fmt.Errorf("flow: step %q returned Fail", m.step.ID())
 		}
 		return m, tea.Quit
 
@@ -187,7 +230,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *flowModel[T]) View() string {
-	if m.step == nil {
+	if m.step == nil || m.flow.state == nil {
 		return ""
 	}
 	return m.step.View(m.flow.state)

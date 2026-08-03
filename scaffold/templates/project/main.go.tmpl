@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/sairaph/mcp"
 	"github.com/sairaph/mcp/handlers"
@@ -11,6 +13,9 @@ import (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	cfg := Config{
 		Transport: "stdio",
 	}
@@ -40,8 +45,10 @@ func main() {
 		log.Fatalf("unknown transport: %s", cfg.Transport)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	go func() {
+		<-ctx.Done()
+		srv.Close()
+	}()
 
 	log.Printf("${ServerName} starting on %s", cfg.Transport)
 	if err := srv.Serve(ctx, transport); err != nil {

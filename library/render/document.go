@@ -3,6 +3,7 @@ package render
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,8 +24,15 @@ type Document struct {
 // or if the output exceeds MaxBytes.
 func (d Document) String() (string, error) {
 	if d.Front != nil {
-		if _, isMap := d.Front.(map[string]any); isMap {
-			return "", fmt.Errorf("render: Front must be a struct, not map[string]any (non-deterministic YAML key order)")
+		v := reflect.ValueOf(d.Front)
+		for v.Kind() == reflect.Ptr {
+			if v.IsNil() {
+				return "", fmt.Errorf("render: Front must not be a nil pointer")
+			}
+			v = v.Elem()
+		}
+		if v.Kind() == reflect.Map {
+			return "", fmt.Errorf("render: Front must be a struct, not a map (non-deterministic YAML key order)")
 		}
 	}
 
@@ -33,9 +41,12 @@ func (d Document) String() (string, error) {
 	if d.Front != nil {
 		enc := yaml.NewEncoder(&buf)
 		enc.SetIndent(2)
-		defer enc.Close()
 		if err := enc.Encode(d.Front); err != nil {
+			enc.Close()
 			return "", fmt.Errorf("render frontmatter: %w", err)
+		}
+		if err := enc.Close(); err != nil {
+			return "", fmt.Errorf("close yaml encoder: %w", err)
 		}
 	}
 	buf.WriteString("---")

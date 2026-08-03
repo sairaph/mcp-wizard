@@ -8,15 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 func randString(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		for i := range b {
-			b[i] = byte(time.Now().UnixNano() >> uint(i*8%64))
-		}
+		// If crypto/rand.Read fails, use whatever bytes we have (they may be zero).
+		// O_EXCL on OpenFile prevents filename collisions regardless.
 	}
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	for i := range b {
@@ -105,7 +103,7 @@ func (s *FileStore) Load(ctx context.Context) (*Session, bool, error) {
 
 	sess := NewSession()
 	if len(data) == 0 {
-		return sess, true, nil
+		return sess, false, nil
 	}
 	if err := json.Unmarshal(data, &sess.Values); err != nil {
 		return nil, false, fmt.Errorf("parse credentials: %w", err)

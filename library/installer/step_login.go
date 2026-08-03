@@ -22,7 +22,7 @@ type LoginConfig struct {
 // LoginStage is one step in a multi-stage login flow.
 type LoginStage struct {
 	Prompt string
-	Fields []LoginField
+	Field  LoginField
 	Submit func(ctx context.Context, sess *secret.Session) error
 }
 
@@ -42,19 +42,22 @@ type LoginState struct {
 	Input      string
 	Cursor     int
 	Submitting bool
+	Message    string
 }
 
 // LoginStep returns a flow.Step for credential collection.
-func LoginStep[T any](config LoginConfig, stateFn func(*T) *LoginState) flow.Step[T] {
+func LoginStep[T any](ctx context.Context, config LoginConfig, stateFn func(*T) *LoginState) flow.Step[T] {
 	return &loginStep[T]{
 		config:  config,
 		stateFn: stateFn,
+		ctx:     ctx,
 	}
 }
 
 type loginStep[T any] struct {
 	config  LoginConfig
 	stateFn func(*T) *LoginState
+	ctx     context.Context
 }
 
 type skipLoginMsg struct{}
@@ -84,15 +87,20 @@ func (s *loginStep[T]) Hints(state *T) []struct{ Key, Label string } {
 		return nil
 	}
 	if lState.Stage == -1 {
-		return []struct{ Key, Label string }{
+		hints := []struct{ Key, Label string }{
 			{Key: "\u2191\u2193", Label: "move"},
 			{Key: "enter", Label: "select"},
-			{Key: "esc", Label: "skip"},
 		}
+		if s.config.Skippable {
+			hints = append(hints, struct{ Key, Label string }{Key: "esc", Label: "skip"})
+		} else {
+			hints = append(hints, struct{ Key, Label string }{Key: "esc", Label: "back"})
+		}
+		return hints
 	}
 	return []struct{ Key, Label string }{
 		{Key: "enter", Label: "confirm"},
-		{Key: "esc", Label: "skip"},
+		{Key: "esc", Label: "back"},
 	}
 }
 
@@ -113,8 +121,8 @@ func (s *loginStep[T]) Init(state *T) tea.Cmd {
 
 	// Check if already logged in (session exists).
 	if s.config.Store != nil {
-		sess, exists, err := s.config.Store.Load(context.Background())
-		if err == nil && exists && sess.GetString("email") != "" {
+		sess, exists, err := s.config.Store.Load(s.ctx)
+		if err == nil && exists && sess != nil && sess.GetString("email") != "" {
 			lState.Session = sess
 			lState.Skipped = false
 			return func() tea.Msg { return skipLoginMsg{} }
@@ -145,17 +153,19 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 		case submitResultMsg:
 			lState.Submitting = false
 			if msg.err != nil {
+				lState.Message = msg.err.Error()
 				var retry secret.RetryableError
 				if errors.As(msg.err, &retry) {
 					return flow.Continue, nil
 				}
-				return flow.Continue, nil
+				return flow.Fail, nil
 			}
 			return s.advanceStage(lState)
 
 		case persistResultMsg:
 			lState.Submitting = false
 			if msg.err != nil {
+				lState.Message = "failed to save credentials: " + msg.err.Error()
 				return flow.Continue, nil
 			}
 			return flow.Next, nil
@@ -170,8 +180,14 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 			switch msg.String() {
 			case "up", "k":
 				lState.Cursor = 1 - lState.Cursor
+				if !s.config.Skippable && lState.Cursor > 0 {
+					lState.Cursor = 0
+				}
 			case "down", "j":
 				lState.Cursor = 1 - lState.Cursor
+				if !s.config.Skippable && lState.Cursor > 0 {
+					lState.Cursor = 0
+				}
 			case "enter":
 				if lState.Cursor == 0 {
 					lState.Stage = 0
@@ -203,20 +219,22 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 		switch msg.String() {
 		case "enter":
 			allValid := true
-			for _, f := range stage.Fields {
-				if f.Validate != nil {
-					if err := f.Validate(lState.Input); err != nil {
-						allValid = false
-					}
+			if stage.Field.Validate != nil {
+				if err := stage.Field.Validate(lState.Input); err != nil {
+					allValid = false
+					lState.Message = err.Error()
 				}
 			}
-			if !allValid || lState.Input == "" {
+			if !allValid {
 				return flow.Continue, nil
 			}
 
 			// Store the current field value.
-			if len(stage.Fields) > 0 {
-				lState.Session.Set(stage.Fields[0].Name, lState.Input)
+			if true {
+				if lState.Session == nil {
+					lState.Session = secret.NewSession()
+				}
+				lState.Session.Set(stage.Field.Name, lState.Input)
 			}
 
 			// Submit if there's a submit function.
@@ -225,13 +243,19 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 				stageIdx := lState.Stage
 				sess := lState.Session
 				return flow.Continue, func() tea.Msg {
-					err := stage.Submit(context.Background(), sess)
+					err := stage.Submit(s.ctx, sess)
 					return submitResultMsg{stage: stageIdx, err: err}
 				}
 			}
 			return s.advanceStage(lState)
 
 		case "esc":
+			if lState.Stage >= 0 {
+				lState.Stage = -1
+				lState.Input = ""
+				lState.Message = ""
+				return flow.Continue, nil
+			}
 			if s.config.Skippable {
 				lState.Skipped = true
 				return flow.Next, nil
@@ -256,17 +280,26 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 	return flow.Continue, nil
 }
 
+func advanceStage(lState *LoginState, stages int) {
+	if lState.Stage+1 >= stages {
+		return
+	}
+	lState.Stage++
+	lState.Input = ""
+	lState.Message = ""
+	lState.Submitting = false
+}
+
 func (s *loginStep[T]) advanceStage(lState *LoginState) (flow.Directive, tea.Cmd) {
 	if lState.Stage+1 < len(s.config.Stages) {
-		lState.Stage++
-		lState.Input = ""
+		advanceStage(lState, len(s.config.Stages))
 		return flow.Continue, nil
 	}
 	// All stages done -- persist.
 	if s.config.Store != nil {
 		lState.Submitting = true
 		return flow.Continue, func() tea.Msg {
-			err := s.config.Store.Save(context.Background(), lState.Session)
+			err := s.config.Store.Save(s.ctx, lState.Session)
 			return persistResultMsg{err: err}
 		}
 	}
@@ -292,21 +325,28 @@ func (s *loginStep[T]) View(state *T) string {
 		content += "\n" + tui.Footer(theme, tui.Hints(theme,
 			tui.Hint{Key: "\u2191\u2193", Label: "move"},
 			tui.Hint{Key: "enter", Label: "select"},
-			tui.Hint{Key: "esc", Label: "skip"},
 		))
-	} else if lState.Stage < len(s.config.Stages) {
+		if s.config.Skippable {
+			content += "\n" + tui.Footer(theme, tui.Hints(theme,
+				tui.Hint{Key: "esc", Label: "skip"},
+			))
+		}
+	} else if lState.Stage >= 0 && lState.Stage < len(s.config.Stages) {
 		// Input stage.
 		stage := s.config.Stages[lState.Stage]
 
 		masked := false
-		if len(stage.Fields) > 0 {
-			masked = stage.Fields[0].Masked
+		if true {
+			masked = stage.Field.Masked
 		}
 
 		content = "  " + tui.TextInput(lState.Input, "type here...", masked) + "\n"
+		if lState.Message != "" {
+			content += "\n" + theme.Styles().Err.Render("  " + lState.Message) + "\n"
+		}
 		content += "\n" + tui.Footer(theme, tui.Hints(theme,
 			tui.Hint{Key: "enter", Label: "confirm"},
-			tui.Hint{Key: "esc", Label: "skip"},
+			tui.Hint{Key: "esc", Label: "back"},
 		))
 	} else {
 		content = "  Signed in.\n"

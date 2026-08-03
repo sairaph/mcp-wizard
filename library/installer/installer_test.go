@@ -2,6 +2,7 @@ package installer_test
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -182,14 +183,22 @@ func TestPrintPathHint(t *testing.T) {
 }
 
 func TestHarnessStepID(t *testing.T) {
-	step := installer.HarnessStep[int](nil, func(*int) *installer.HarnessState { return nil }, installer.HarnessStepOptions{})
+	detector, err := harness.New(harness.ServerSpec{Name: "test", Command: "echo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := installer.HarnessStep[int](context.Background(), detector, func(*int) *installer.HarnessState { return nil }, installer.HarnessStepOptions{})
 	if got := step.ID(); got != "harnesses" {
 		t.Errorf("ID() = %q, want %q", got, "harnesses")
 	}
 }
 
 func TestHarnessStepTitle(t *testing.T) {
-	step := installer.HarnessStep[int](nil, func(*int) *installer.HarnessState { return nil }, installer.HarnessStepOptions{})
+	detector, err := harness.New(harness.ServerSpec{Name: "test", Command: "echo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := installer.HarnessStep[int](context.Background(), detector, func(*int) *installer.HarnessState { return nil }, installer.HarnessStepOptions{})
 	title := step.Title(new(int))
 	if !strings.Contains(title, "AI clients") {
 		t.Errorf("Title should mention AI clients, got: %q", title)
@@ -198,7 +207,7 @@ func TestHarnessStepTitle(t *testing.T) {
 
 func TestLoginStepID(t *testing.T) {
 	cfg := installer.LoginConfig{ID: "my-login", Label: "My Login"}
-	step := installer.LoginStep[int](cfg, func(*int) *installer.LoginState { return nil })
+	step := installer.LoginStep[int](context.Background(), cfg, func(*int) *installer.LoginState { return nil })
 	if got := step.ID(); got != "my-login" {
 		t.Errorf("ID() = %q, want %q", got, "my-login")
 	}
@@ -206,7 +215,7 @@ func TestLoginStepID(t *testing.T) {
 
 func TestLoginStepTitle(t *testing.T) {
 	cfg := installer.LoginConfig{ID: "my-login", Label: "My Login"}
-	step := installer.LoginStep[int](cfg, func(*int) *installer.LoginState { return nil })
+	step := installer.LoginStep[int](context.Background(), cfg, func(*int) *installer.LoginState { return nil })
 	title := step.Title(new(int))
 	if !strings.Contains(title, "My Login") {
 		t.Errorf("Title should contain label, got: %q", title)

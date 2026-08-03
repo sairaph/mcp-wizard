@@ -14,8 +14,12 @@ type Options struct {
 }
 
 func Run[T any](ctx context.Context, f *flow.Flow[T], opts Options) int {
+	if f == nil {
+		return 1
+	}
 	theme := opts.Theme
-	if theme.Copy.Title == "" || theme.Colors.Primary == "" {
+	// Only default when no theme fields are set — partial overrides are respected.
+	if theme == (Theme{}) {
 		theme = DefaultTheme
 	}
 	if opts.Title != "" {

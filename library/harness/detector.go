@@ -29,11 +29,19 @@ func New(spec ServerSpec) (*Detector, error) {
 }
 
 // Name returns the server name.
-func (d *Detector) Name() string { return d.name }
+func (d *Detector) Name() string {
+	if d == nil {
+		return ""
+	}
+	return d.name
+}
 
 // Detect probes all harnesses and returns Harness values with the Configured
 // flag set (computed by running a Plan and checking for ChangeNoop).
 func (d *Detector) Detect(ctx context.Context) []Harness {
+	if d == nil || d.installer == nil {
+		return nil
+	}
 	raw := d.installer.Detect(ctx)
 	results := make([]Harness, 0, len(raw))
 
@@ -46,7 +54,7 @@ func (d *Detector) Detect(ctx context.Context) []Harness {
 	if len(ids) > 0 {
 		plan := d.installer.Plan(ctx, ids, detectharness.Present, detectharness.PlanOptions{ConflictPolicy: detectharness.ConflictReplace})
 		for _, ch := range plan.Changes() {
-			if ch.State == "noop" {
+			if ch.State == detectharness.ChangeNoop {
 				configured[ID(ch.HarnessID)] = true
 			}
 		}
@@ -73,6 +81,9 @@ func (d *Detector) Detect(ctx context.Context) []Harness {
 
 // Apply registers or unregisters the server in the given harnesses.
 func (d *Detector) Apply(ctx context.Context, ids []ID, desired DesiredState, policy ConflictPolicy) []Result {
+	if d == nil || d.installer == nil {
+		return nil
+	}
 	dhIDs := make([]detectharness.ID, len(ids))
 	for i, id := range ids {
 		dhIDs[i] = detectharness.ID(id)
@@ -106,6 +117,9 @@ func (d *Detector) Apply(ctx context.Context, ids []ID, desired DesiredState, po
 
 // PlanResults computes changes without writing, for dry-run preview.
 func (d *Detector) PlanResults(ctx context.Context, ids []ID, desired DesiredState, policy ConflictPolicy) ([]Change, error) {
+	if d == nil || d.installer == nil {
+		return nil, nil
+	}
 	dhIDs := make([]detectharness.ID, len(ids))
 	for i, id := range ids {
 		dhIDs[i] = detectharness.ID(id)

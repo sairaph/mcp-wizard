@@ -41,21 +41,33 @@ func ShortPath(path string) string {
 	if err != nil || home == "" {
 		return path
 	}
-	return strings.ReplaceAll(path, home+string(filepath.Separator),
-		"~"+string(filepath.Separator))
+	if path == home {
+		return "~"
+	}
+	trimmed := strings.TrimPrefix(path, home+string(filepath.Separator))
+	if trimmed != path {
+		return "~/" + trimmed
+	}
+	return path
 }
 
 func Wrap(text string, width int) []string {
+	if width <= 0 {
+		width = 76
+	}
 	if text == "" {
 		return nil
 	}
 	var lines []string
 	for _, line := range strings.Split(text, "\n") {
-		for len(line) > width {
-			lines = append(lines, line[:width])
-			line = line[width:]
+		runes := []rune(line)
+		for len(runes) > width {
+			lines = append(lines, string(runes[:width]))
+			runes = runes[width:]
 		}
-		lines = append(lines, line)
+		if len(runes) > 0 {
+			lines = append(lines, string(runes))
+		}
 	}
 	return lines
 }

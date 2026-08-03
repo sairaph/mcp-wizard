@@ -61,7 +61,9 @@ func ProgressBar(done, total, width int) string {
 		done = total
 	}
 	filled := done * (width - 2) / total
-	if filled > width-2 {
+	if filled < 0 {
+		filled = 0
+	} else if filled > width-2 {
 		filled = width - 2
 	}
 	return fmt.Sprintf("[%s%s]", strings.Repeat("#", filled), strings.Repeat("-", width-2-filled))
