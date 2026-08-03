@@ -56,7 +56,6 @@ func TestActionWithExtraData(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ActionMsg")
 	}
-	_ = actionMsg
 	if actionMsg.Data != 7 {
 		t.Errorf("expected Data=7, got %v", actionMsg.Data)
 	}

@@ -42,7 +42,7 @@ func New(title string, items []string, page, perPage, total int) *Model {
 // TotalPages returns the total number of pages.
 func (m *Model) TotalPages() int {
 	if m.PerPage <= 0 || m.Total <= 0 {
-		return 1
+		return 0
 	}
 	return (m.Total + m.PerPage - 1) / m.PerPage
 }
@@ -54,6 +54,16 @@ func (m *Model) HasNext() bool { return m.Page+1 < m.TotalPages() }
 func (m *Model) HasPrev() bool { return m.Page > 0 }
 
 func (m *Model) Init() tea.Cmd { return nil }
+
+func (m *Model) SetItems(items []string) {
+	m.Items = items
+	if m.Cursor >= len(items) {
+		m.Cursor = len(items) - 1
+	}
+	if m.Cursor < 0 {
+		m.Cursor = 0
+	}
+}
 
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
@@ -96,7 +106,12 @@ func (m *Model) View() string {
 	}
 	// Footer
 	totalPages := m.TotalPages()
-	footer := fmt.Sprintf("  page %d/%d (%d items)", m.Page+1, totalPages, m.Total)
+	var footer string
+	if totalPages > 0 {
+		footer = fmt.Sprintf("  page %d/%d (%d items)", m.Page+1, totalPages, m.Total)
+	} else {
+		footer = fmt.Sprintf("  %d items", m.Total)
+	}
 	if m.HasNext() {
 		footer += "  n next"
 	}

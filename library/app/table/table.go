@@ -60,7 +60,7 @@ func New(title string, columns []Column, rows []Row) *Model {
 // SetRows updates the data and resets scroll.
 func (m *Model) SetRows(rows []Row) {
 	m.Rows = rows
-	if m.Cursor >= len(rows) {
+	if m.Cursor >= len(rows) || m.Cursor < 0 {
 		m.Cursor = 0
 	}
 	m.render()
@@ -121,23 +121,31 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 				m.Cursor--
 				m.render()
 			}
+			return nil
 		case "down", "j":
 			if m.Cursor < len(m.Rows)-1 {
 				m.Cursor++
 				m.render()
 			}
+			return nil
 		case "home", "g":
 			m.Cursor = 0
 			m.render()
+			return nil
 		case "end", "G":
 			if len(m.Rows) > 0 {
 				m.Cursor = len(m.Rows) - 1
 				m.render()
 			}
+			return nil
 		case "pgup":
 			m.Viewport.ViewUp()
+			m.render()
+			return nil
 		case "pgdown":
 			m.Viewport.ViewDown()
+			m.render()
+			return nil
 		case "enter":
 			if len(m.Rows) > 0 {
 				return app.Action("table", "select", m.Cursor)
@@ -171,6 +179,9 @@ func (m *Model) View() string {
 }
 
 func truncateCell(s string, width int) string {
+	if width < 0 {
+		return ""
+	}
 	runes := []rune(s)
 	if len(runes) <= width {
 		return s

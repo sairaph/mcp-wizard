@@ -83,7 +83,10 @@ if [ ! -s "$TEMP" ]; then
   exit 1
 fi
 chmod +x "$TEMP"
-mv -f "$TEMP" "$TARGET"
+if ! mv -f "$TEMP" "$TARGET"; then
+	printf '\n  Failed to install binary to %s\n' "$TARGET" >&2
+	exit 1
+fi
 trap - EXIT HUP INT TERM
 
 case ":$PATH:" in
@@ -99,7 +102,6 @@ if [ "$on_path" -eq 0 ]; then
       printf '\n# added by %s installer\n%s\n' "$BIN" "$line" >> "$rc"
     fi
     on_path=2
-    break
   done
 fi
 

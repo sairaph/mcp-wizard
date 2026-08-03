@@ -122,10 +122,19 @@ func (s *loginStep[T]) Init(state *T) tea.Cmd {
 	// Check if already logged in (session exists).
 	if s.config.Store != nil {
 		sess, exists, err := s.config.Store.Load(s.ctx)
-		if err == nil && exists && sess != nil && sess.GetString("email") != "" {
-			lState.Session = sess
-			lState.Skipped = false
-			return func() tea.Msg { return skipLoginMsg{} }
+		if err == nil && exists && sess != nil {
+			hasSession := false
+			for _, stage := range s.config.Stages {
+				if sess.GetString(stage.Field.Name) != "" {
+					hasSession = true
+					break
+				}
+			}
+			if hasSession {
+				lState.Session = sess
+				lState.Skipped = false
+				return func() tea.Msg { return skipLoginMsg{} }
+			}
 		}
 	}
 

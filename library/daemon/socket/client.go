@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"sync/atomic"
+	"time"
 
 	"github.com/sairaph/mcp-wizard/daemon/rpc"
 )
@@ -37,47 +37,42 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	id := atomic.AddInt64(&c.nextID, 1)
+	id := c.nextID
+	c.nextID++
+
 	req, err := rpc.NewRequest(id, method, params)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 
-	type callResult struct {
-		resp rpc.Response
-		err  error
+	if err := c.enc.Encode(req); err != nil {
+		return fmt.Errorf("send request: %w", err)
 	}
-	ch := make(chan callResult, 1)
+
+	done := make(chan struct{})
 	go func() {
-		if err := c.enc.Encode(req); err != nil {
-			ch <- callResult{err: fmt.Errorf("send request: %w", err)}
-			return
+		select {
+		case <-done:
+		case <-ctx.Done():
+			c.conn.SetReadDeadline(time.Now())
 		}
-		var resp rpc.Response
-		if err := c.dec.Decode(&resp); err != nil {
-			ch <- callResult{err: fmt.Errorf("read response: %w", err)}
-			return
-		}
-		ch <- callResult{resp: resp}
 	}()
-	select {
-	case <-ctx.Done():
-		c.conn.Close()
-		return ctx.Err()
-	case r := <-ch:
-		if r.err != nil {
-			return r.err
-		}
-		if r.resp.Error != nil {
-			return fmt.Errorf("daemon error: %s", r.resp.Error.Message)
-		}
-		if result != nil && r.resp.Result != nil {
-			if err := json.Unmarshal(r.resp.Result, result); err != nil {
-				return fmt.Errorf("decode result: %w", err)
-			}
-		}
-		return nil
+	defer close(done)
+
+	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	var resp rpc.Response
+	if err := c.dec.Decode(&resp); err != nil {
+		return fmt.Errorf("read response: %w", err)
 	}
+	if resp.Error != nil {
+		return fmt.Errorf("daemon error: %s", resp.Error.Message)
+	}
+	if result != nil && resp.Result != nil {
+		if err := json.Unmarshal(resp.Result, result); err != nil {
+			return fmt.Errorf("decode result: %w", err)
+		}
+	}
+	return nil
 }
 
 func (c *Client) Close() error {

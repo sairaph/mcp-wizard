@@ -156,13 +156,13 @@ func TestTotalPages(t *testing.T) {
 	tests := []struct {
 		total, perPage, want int
 	}{
-		{0, 5, 1},
+		{0, 5, 0},
 		{1, 5, 1},
 		{5, 5, 1},
 		{6, 5, 2},
 		{10, 5, 2},
 		{11, 5, 3},
-		{10, 0, 1},
+		{10, 0, 0},
 	}
 	for _, tc := range tests {
 		m := paginator.New("t", nil, 0, tc.perPage, tc.total)

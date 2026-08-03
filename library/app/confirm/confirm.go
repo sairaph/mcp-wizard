@@ -53,6 +53,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 }
 
 func (m *Model) View() string {
+	if m.Choice < 0 || m.Choice > 1 {
+		m.Choice = 0
+	}
 	var out strings.Builder
 	out.WriteString(m.styleTitle.Render("  " + m.Title) + "\n\n")
 	if m.Detail != "" {

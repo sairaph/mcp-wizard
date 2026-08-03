@@ -95,9 +95,15 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			if m.Searching {
 				return nil
 			}
-			m.Searching = true
-			m.Query = m.Input.Value()
-			return app.Action("search", "query", m.Query)
+			if len(m.Results) > 0 {
+				return app.Action("search", "select", m.Cursor)
+			}
+			if m.Input.Value() != "" {
+				m.Searching = true
+				m.Query = m.Input.Value()
+				return app.Action("search", "query", m.Query)
+			}
+			return nil
 		case "up":
 			if m.Cursor > 0 {
 				m.Cursor--
@@ -114,12 +120,14 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			m.Cursor = 0
 			m.Viewport.GotoTop()
 			m.renderResults()
+			return nil
 		case "end", "G":
 			if len(m.Results) > 0 {
 				m.Cursor = len(m.Results) - 1
 				m.Viewport.GotoBottom()
 				m.renderResults()
 			}
+			return nil
 		case "esc":
 			return app.Action("search", "cancelled")
 		}

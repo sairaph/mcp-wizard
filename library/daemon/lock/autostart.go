@@ -20,8 +20,14 @@ func EnsureRunning(executable string, args []string, lockFile string) bool {
 	cmd.SysProcAttr = detachAttr()
 	cmd.Dir = filepath.Dir(executable)
 
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "daemon: open devnull: %v\n", err)
+		return false
+	}
+	defer devNull.Close()
+	cmd.Stdout = devNull
+	cmd.Stderr = devNull
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "daemon: failed to start: %v\n", err)
@@ -29,11 +35,11 @@ func EnsureRunning(executable string, args []string, lockFile string) bool {
 	}
 
 	// Poll for the daemon to acquire the lock.
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		if IsRunning(lockFile) {
 			return true
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	return IsRunning(lockFile)
 }

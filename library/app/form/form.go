@@ -87,7 +87,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		switch msg.String() {
 		case "tab", "down":
 			if len(m.Inputs) == 0 {
-				break
+				return nil
 			}
 			m.Focused = (m.Focused + 1) % len(m.Inputs)
 			for i := range m.Inputs {
@@ -100,7 +100,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		case "shift+tab", "up":
 			if len(m.Inputs) == 0 {
-				break
+				return nil
 			}
 			m.Focused = (m.Focused - 1 + len(m.Inputs)) % len(m.Inputs)
 			for i := range m.Inputs {
@@ -112,10 +112,13 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			}
 			return nil
 		case "enter":
-			// Validate all fields.
-			for i, f := range m.Fields {
-				if f.Validate != nil {
-					if err := f.Validate(m.Inputs[i].Value()); err != nil {
+			m.Error = ""
+		for i, f := range m.Fields {
+			if i >= len(m.Inputs) {
+				break
+			}
+			if f.Validate != nil {
+				if err := f.Validate(m.Inputs[i].Value()); err != nil {
 						m.Error = err.Error()
 						m.Focused = i
 						for j := range m.Inputs {
@@ -139,6 +142,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	if len(m.Inputs) == 0 {
 		return nil
 	}
+	if len(m.Inputs) == 0 || m.Focused < 0 || m.Focused >= len(m.Inputs) {
+		return nil
+	}
 	var cmd tea.Cmd
 	m.Inputs[m.Focused], cmd = m.Inputs[m.Focused].Update(msg)
 	return cmd
@@ -149,6 +155,9 @@ func (m *Model) View() string {
 	out.WriteString(m.styleTitle.Render("  " + m.Title) + "\n\n")
 
 	for i, input := range m.Inputs {
+		if i >= len(m.Fields) {
+			break
+		}
 		label := m.Fields[i].Label
 		prefix := "  "
 		if i == m.Focused {

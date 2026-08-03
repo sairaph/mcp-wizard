@@ -107,23 +107,12 @@ func Stop(pidFile, lockFile string) error {
 			pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 			if err == nil && pid > 0 {
 				proc, err := os.FindProcess(pid)
-				if err == nil {
-					if err := proc.Signal(os.Interrupt); err == nil {
-						done := make(chan struct{})
-						go func() {
-							proc.Wait()
-							close(done)
-						}()
-						select {
-						case <-done:
-							stopped = true
-						case <-time.After(3 * time.Second):
-							proc.Signal(os.Kill)
-							<-done
-							stopped = true
-						}
-					}
-				}
+			if err != nil {
+				return fmt.Errorf("find process %d: %w", pid, err)
+			}
+			if err := proc.Signal(os.Interrupt); err == nil {
+				stopped = true
+			}
 			}
 		}
 	}

@@ -32,7 +32,7 @@ func New(version string) *Server {
 func (s *Server) Run(ctx context.Context) error {
 	// By default, run as stdio server.
 	// Replace with SSE or other transport as needed.
-	return s.mcpServer.ServeStdio(ctx)
+	return s.mcpServer.Serve(ctx)
 }
 
 // Register a tool:

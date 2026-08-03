@@ -16,7 +16,7 @@ import (
 //go:embed all:templates
 var templateFS embed.FS
 
-var validOwner = regexp.MustCompile(`^[A-Za-z0-9_]([A-Za-z0-9_-]?[A-Za-z0-9_])*$|^[A-Za-z0-9_]$`)
+var validOwner = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]?[A-Za-z0-9])*$|^[A-Za-z0-9]$`)
 var validName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 
 var goKeywords = map[string]bool{
@@ -47,10 +47,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: --name must be a valid Go identifier\n")
 		os.Exit(2)
 	}
-	if *name == "_" {
-		fmt.Fprintf(os.Stderr, "Error: --name cannot be \"_\" (blank identifier)\n")
-		os.Exit(2)
-	}
 	if goKeywords[*name] {
 		fmt.Fprintf(os.Stderr, "Error: --name %q is a Go keyword and cannot be used\n", *name)
 		os.Exit(2)
@@ -76,7 +72,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	modulePath := fmt.Sprintf("github.com/%s/%s", strings.ToLower(*owner), *name)
+	modulePath := fmt.Sprintf("github.com/%s/%s", strings.ToLower(*owner), strings.ToLower(*name))
 
 	// Check Go is available before writing any files.
 	if _, err := exec.LookPath("go"); err != nil {
@@ -175,7 +171,7 @@ func scaffoldScripts(targetDir string, subs map[string]string) error {
 		}
 
 		if d.IsDir() {
-			return nil
+			return os.MkdirAll(filepath.Join(targetDir, rel), 0755)
 		}
 
 		targetPath := filepath.Join(targetDir, rel)

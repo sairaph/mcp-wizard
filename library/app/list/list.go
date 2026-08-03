@@ -56,13 +56,14 @@ func New(title string, items []Item, page, total, perPage int) *Model {
 	}
 	m.Viewport = viewport.New(m.Width, m.Height-4)
 	m.Viewport.YPosition = 2
+	m.render()
 	return m
 }
 
 // SetItems updates the item list and resets the cursor.
 func (m *Model) SetItems(items []Item) {
 	m.Items = items
-	if m.Cursor >= len(items) {
+	if m.Cursor >= len(items) || m.Cursor < 0 {
 		m.Cursor = 0
 	}
 	m.render()
@@ -76,7 +77,10 @@ func (m *Model) Selected() int {
 	return m.Cursor
 }
 
-func (m *Model) Init() tea.Cmd { return nil }
+func (m *Model) Init() tea.Cmd {
+	m.render()
+	return nil
+}
 
 func (m *Model) render() {
 	var out strings.Builder
@@ -112,31 +116,35 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		case "up", "k":
 			if m.Cursor > 0 {
 				m.Cursor--
-				m.Viewport.LineUp(1)
 				m.render()
 			}
+			return nil
 		case "down", "j":
 			if m.Cursor < len(m.Items)-1 {
 				m.Cursor++
-				m.Viewport.LineDown(1)
 				m.render()
 			}
+			return nil
 		case "pgup":
 			m.Viewport.ViewUp()
 			m.render()
+			return nil
 		case "pgdown":
 			m.Viewport.ViewDown()
 			m.render()
+			return nil
 		case "home", "g":
 			m.Cursor = 0
 			m.Viewport.GotoTop()
 			m.render()
+			return nil
 		case "end", "G":
 			if len(m.Items) > 0 {
 				m.Cursor = len(m.Items) - 1
 				m.Viewport.GotoBottom()
 				m.render()
 			}
+			return nil
 		case "enter":
 			if len(m.Items) > 0 {
 				return app.Action("list", "select", m.Cursor)
@@ -169,10 +177,14 @@ func (m *Model) View() string {
 
 	out.WriteString(m.Viewport.View())
 	out.WriteString("\n")
-	totalPages := 1
-	if m.PerPage > 0 {
+	totalPages := 0
+	if m.PerPage > 0 && m.Total > 0 {
 		totalPages = (m.Total + m.PerPage - 1) / m.PerPage
 	}
-	out.WriteString(m.styleDim.Render(fmt.Sprintf("  %d items (page %d/%d)  \u2191\u2193 move \u00b7 enter select", len(m.Items), m.Page+1, totalPages)))
+	if totalPages > 0 {
+		out.WriteString(m.styleDim.Render(fmt.Sprintf("  %d items (page %d/%d)  \u2191\u2193 move \u00b7 enter select", len(m.Items), m.Page+1, totalPages)))
+	} else {
+		out.WriteString(m.styleDim.Render(fmt.Sprintf("  %d items  \u2191\u2193 move \u00b7 enter select", len(m.Items))))
+	}
 	return out.String()
 }

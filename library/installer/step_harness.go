@@ -251,6 +251,9 @@ func ToggleHarness(state *HarnessState) {
 	if state == nil || state.Cursor < 0 || state.Cursor >= len(state.Detections) {
 		return
 	}
+	if state.Selected == nil {
+		state.Selected = make(map[harness.ID]bool)
+	}
 	h := state.Detections[state.Cursor]
 	if !h.Selectable() {
 		return
@@ -259,7 +262,10 @@ func ToggleHarness(state *HarnessState) {
 }
 
 func ToggleAll(state *HarnessState) {
-	if state == nil || state.Selected == nil {
+	if state == nil {
+		return
+	}
+	if state.Selected == nil {
 		state.Selected = make(map[harness.ID]bool)
 	}
 	anyUnselected := false

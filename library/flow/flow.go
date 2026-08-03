@@ -146,7 +146,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case Next:
 		stepCmd := cmd
 		if !m.flow.Advance() {
-			return m, tea.Quit
+			return m, tea.Batch(stepCmd, tea.Quit)
 		}
 		m.step = m.flow.steps[m.flow.current]
 		if m.step == nil {
@@ -172,7 +172,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case Skip:
 		stepCmd := cmd
 		if !m.flow.Advance() {
-			return m, tea.Quit
+			return m, tea.Batch(stepCmd, tea.Quit)
 		}
 		m.step = m.flow.steps[m.flow.current]
 		if m.step == nil {

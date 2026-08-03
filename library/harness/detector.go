@@ -44,6 +44,9 @@ func (d *Detector) Detect(ctx context.Context) []Harness {
 	}
 	raw := d.installer.Detect(ctx)
 	results := make([]Harness, 0, len(raw))
+	for _, r := range raw {
+		results = append(results, convertDetection(r))
+	}
 
 	// Gather IDs of already-configured harnesses by running a Plan.
 	configured := make(map[ID]bool)
@@ -53,6 +56,9 @@ func (d *Detector) Detect(ctx context.Context) []Harness {
 	}
 	if len(ids) > 0 {
 		plan := d.installer.Plan(ctx, ids, detectharness.Present, detectharness.PlanOptions{ConflictPolicy: detectharness.ConflictReplace})
+		if plan == nil {
+			return results
+		}
 		for _, ch := range plan.Changes() {
 			if ch.State == detectharness.ChangeNoop {
 				configured[ID(ch.HarnessID)] = true
@@ -60,10 +66,8 @@ func (d *Detector) Detect(ctx context.Context) []Harness {
 		}
 	}
 
-	for _, r := range raw {
-		h := convertDetection(r)
-		h.Configured = configured[ID(r.ID)]
-		results = append(results, h)
+	for i, r := range raw {
+		results[i].Configured = configured[ID(r.ID)]
 	}
 
 	// Sort: detected first, then by name.
@@ -98,6 +102,9 @@ func (d *Detector) Apply(ctx context.Context, ids []ID, desired DesiredState, po
 	}
 
 	plan := d.installer.Plan(ctx, dhIDs, dhDesired, detectharness.PlanOptions{ConflictPolicy: dhPolicy})
+	if plan == nil {
+		return nil
+	}
 	rawResults := d.installer.Apply(ctx, plan)
 
 	results := make([]Result, len(rawResults))
@@ -134,6 +141,9 @@ func (d *Detector) PlanResults(ctx context.Context, ids []ID, desired DesiredSta
 	}
 
 	plan := d.installer.Plan(ctx, dhIDs, dhDesired, detectharness.PlanOptions{ConflictPolicy: dhPolicy})
+	if plan == nil {
+		return nil, nil
+	}
 	changes := plan.Changes()
 
 	result := make([]Change, len(changes))

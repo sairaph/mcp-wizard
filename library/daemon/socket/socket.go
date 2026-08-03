@@ -25,6 +25,8 @@ type Server struct {
 	mu           sync.Mutex
 	wg           sync.WaitGroup
 	cleanupOnce  sync.Once
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 func New(socketDir, name string) *Server {
@@ -58,6 +60,7 @@ func (s *Server) Open() error {
 		return fmt.Errorf("listen: %w", err)
 	}
 	s.listener = listener
+	s.ctx, s.cancel = context.WithCancel(context.Background())
 	return nil
 }
 
@@ -71,6 +74,8 @@ func (s *Server) Serve(ctx context.Context) error {
 		if err != nil {
 			select {
 			case <-ctx.Done():
+				return nil
+			case <-s.ctx.Done():
 				return nil
 			default:
 				return fmt.Errorf("accept: %w", err)
@@ -87,9 +92,17 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	dec := json.NewDecoder(conn)
 	enc := json.NewEncoder(conn)
 	for {
-		conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 		var req rpc.Request
 		if err := dec.Decode(&req); err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
 			return
 		}
 		resp := s.dispatch(ctx, req)
@@ -126,16 +139,11 @@ func (s *Server) cleanup() {
 }
 
 func (s *Server) Close() {
-	if s.listener != nil {
-		s.listener.Close()
+	if s.cancel != nil {
+		s.cancel()
 	}
+	s.cleanup()
 	s.wg.Wait()
-	s.cleanupOnce.Do(func() {
-		os.Remove(s.socketPath)
-		if s.flock != nil {
-			s.flock.Unlock()
-		}
-	})
 }
 
 func (s *Server) SocketPath() string { return s.socketPath }

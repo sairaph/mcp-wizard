@@ -43,8 +43,10 @@ func (m *Model) rebuild() {
 	if m.BuildFn != nil {
 		m.Items = m.BuildFn()
 	}
-	if len(m.Items) == 0 {
+	if m.Cursor < 0 {
 		m.Cursor = 0
+	}
+	if len(m.Items) == 0 {
 		return
 	}
 	if m.Cursor >= len(m.Items) {
@@ -58,6 +60,7 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
+	m.rebuild()
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -81,6 +84,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 }
 
 func (m *Model) View() string {
+	m.rebuild()
 	var out strings.Builder
 	out.WriteString(m.styleTitle.Render("  " + m.Title) + "\n\n")
 	for i, item := range m.Items {
