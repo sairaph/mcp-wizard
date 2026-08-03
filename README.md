@@ -1,5 +1,9 @@
 # mcp-wizard
 
+[![release](https://img.shields.io/github/v/release/sairaph/mcp-wizard?include_prereleases&label=release)](https://github.com/sairaph/mcp-wizard/releases)
+[![license](https://img.shields.io/github/license/sairaph/mcp-wizard)](#license)
+[![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)](#what-it-does)
+
 Build, install, and distribute MCP servers with zero boilerplate.
 
 Write your domain logic and MCP tools. The library gives you everything else:
@@ -7,13 +11,68 @@ harness detection, install wizard TUI, credential UX, output rendering, CLI
 parsing, self-update, doctor checks, project scaffolding, and a full TUI app
 framework for user-facing applications.
 
----
+macOS / Linux:
+
+```bash
+curl -fsSL https://github.com/sairaph/mcp-wizard/releases/latest/download/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://github.com/sairaph/mcp-wizard/releases/latest/download/install.ps1 | iex
+```
+
+The installer downloads the scaffold binary, then run `mcp-wizard new` to
+generate a new MCP server project with install scripts, CI/CD, and a complete
+TUI application — all wired together and ready to build.
+
+Linux x64/ARM64, macOS x64/Apple Silicon, and Windows x64/ARM64 are published.
+
+## What it does
+
+Building an MCP server means writing the same boilerplate every time: AI client
+detection and registration, install wizard, credential storage, output
+rendering, CLI dispatch, self-update, diagnostics, and often a TUI app for
+users. mcp-wizard provides all of it as a Go library, plus a scaffold that
+generates a complete project so you only write your domain logic and MCP tools.
+
+- **detect-harness** powers client detection — finds Claude Desktop, Claude Code,
+  Cursor, VS Code, Windsurf, Zed, Cline, Roo Code, and 6 more on your machine.
+- **The install wizard** walks users through selecting clients, signing in, and
+  configuring settings — in a terminal UI that matches the install script's look.
+- **The app framework** gives you reusable components (menu, list, form, search,
+  table, confirm, paginator) for building your own user-facing TUI application.
+- **Everything is optional** — use just the packages you need.
+
+## Features
+
+- **Project scaffold** — `mcp-wizard new` generates a complete project with
+  `install.sh`/`install.ps1`, GitHub CI/CD workflows, and a wired `main.go`.
+- **24 library packages** — CLI parsing, token-budget pagination, output
+  rendering, install wizard steps, credential management, self-update, health
+  checks, TUI components, daemon lifecycle, one-shot command registry, and more.
+- **AI client detection** — registers your server with 13+ AI clients via the
+  same `detect-harness` library used by all three reference MCP servers.
+- **TUI install wizard** — harness selection, credential login (multi-stage),
+  settings configuration, unattended mode.
+- **TUI app framework** — screen components (menu, list, detail, form, search,
+  table, confirm, paginator) with `ActionMsg` dispatch and step-based navigation.
+- **Daemon lifecycle** — lock-based (file lock + periodic work) or socket-based
+  (Unix socket + JSON-RPC IPC), with autostart and graceful shutdown.
+- **One-shot CLI commands** — register standalone commands that share business
+  logic with the TUI app.
+- **Self-update** — semver version comparison, GitHub release checking, SHA256
+  verification, atomic binary swap with cross-device copy fallback.
+- **Doctor** — health checks for executable, PATH, config, and update status.
+- **Install scripts** — `install.sh` and `install.ps1` with OS/arch detection,
+  SHA256 verification, PATH setup, and interactive configure launch.
 
 ## Quick Start
 
 ```sh
 # Install the scaffold
-curl -fsSL https://github.com/sairaph/mcp-wizard/raw/main/install.sh | sh
+curl -fsSL https://github.com/sairaph/mcp-wizard/releases/latest/download/install.sh | sh
 
 # Generate a new MCP server project
 mcp-wizard new --name my-server --owner myuser --dir ./my-server
@@ -23,59 +82,7 @@ cd ./my-server
 # Then build and ship
 ```
 
----
-
-## What You Get
-
-The scaffold generates a complete project with:
-
-| What | How |
-|---|---|
-| Install scripts | `install.sh` + `install.ps1` with SHA256 verification |
-| CI/CD | GitHub workflows for test, build, release (6 targets) |
-| MCP server skeleton | `internal/mcpserver/` with tool registration |
-| TUI install wizard | Harness detection, credential login, settings |
-| TUI user app | Full-screen app with menu, lists, forms, search |
-| One-shot CLI commands | Standalone commands sharing logic with the app |
-| Self-update | `<bin> update` with semver check + atomic swap |
-| Doctor | `<bin> doctor` for diagnostics |
-| Daemon lifecycle | Lock-based or socket-based background process |
-| AGENTS.md + docs | Tool contract and agent guidelines |
-
----
-
-## How It Works
-
-```
-User runs: curl ... | sh
-              |
-              v
-         install.sh
-   [1] Detect OS/arch
-   [2] Download binary from GitHub release
-   [3] Verify SHA256 checksum
-   [4] Swap binary atomically
-   [5] Launch: <bin> configure
-              |
-              v
-         TUI Install Wizard
-   [6] Detect AI clients (Claude, Cursor, VS Code, etc.)
-   [7] Let user choose which to register with
-   [8] Collect credentials (if needed)
-   [9] Write client configs
-              |
-              v
-         Binary dispatch (main.go)
-  [10] Bare invocation (TTY) → TUI app
-  [11] Bare invocation (pipe) → MCP server
-  [12] Subcommand "install" → install wizard
-  [13] Subcommand "list-items" → one-shot CLI command
-  [14] Subcommand "daemon" → background daemon
-```
-
----
-
-## Library Packages
+## Packages
 
 | Package | Description |
 |---|---|
@@ -89,7 +96,7 @@ User runs: curl ... | sh
 | `secret` | Credential store (FileStore 0600 atomic, EnvStore), Session |
 | `update` | Self-update, semver, SHA256 verification, atomic swap |
 | `doctor` | Health checks (executable, PATH, config, update) |
-| `app` | TUI app framework (step-based, single AppModel) |
+| `app` | TUI app framework (step-based AppModel, ActionMsg dispatch) |
 | `app/menu` | Dynamic menu component |
 | `app/list` | Scrollable list with pagination |
 | `app/detail` | Scrollable content viewer |
@@ -104,89 +111,10 @@ User runs: curl ... | sh
 | `daemon/socket` | Unix-socket daemon with JSON-RPC IPC |
 | `daemon/rpc` | JSON-RPC protocol types |
 
----
-
-## Your Code
-
-Your MCP server has four parts:
-
-### 1. Domain logic (`internal/domain/`)
-
-```go
-type Client struct {
-    BaseURL string
-    Token   string
-}
-
-func NewClient(token string) *Client { ... }
-func (c *Client) GetBoards(ctx context.Context) ([]Board, error) { ... }
-```
-
-### 2. MCP tools (`internal/mcpserver/`)
-
-```go
-mcp.AddTool(srv, &mcp.Tool{
-    Name:        "list_boards",
-    Description: "List all boards...",
-    InputSchema: ...,
-}, s.handleListBoards)
-
-func (s *Server) handleListBoards(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-    boards, err := s.client.GetBoards(ctx)
-    if err != nil {
-        return render.ErrorResult(render.Classify(err, errorTable)), nil
-    }
-    return render.SuccessResult(front, body), nil
-}
-```
-
-### 3. App screens (`internal/app/`)
-
-```go
-type screen int
-const (
-    screenMenu  screen = iota
-    screenList
-)
-
-type State struct {
-    app.AppModel
-    items []Item
-}
-
-func (m *State) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-    if m.HandleGlobalKeys(msg) {
-        return m, nil
-    }
-    switch m.Step {
-    case screenMenu:
-        cmd := m.Menu.Update(msg)
-        // handle menu actions via ActionMsg
-    }
-    return m, nil
-}
-```
-
-### 4. Main dispatch (`main.go`)
-
-```go
-func main() {
-    cmd, err := cli.Parse(os.Args[1:])
-    switch cmd.Name {
-    case "mcp":      runMCPServer(ctx)
-    case "install":  runInstall(ctx, cmd)
-    case "list-items": oneShotCommands.Dispatch(ctx, cmd.Name, cmd.Args)
-    default:
-        if tui.IsInteractive() {
-            os.Exit(app.Run(ctx, &State{...}, app.Options{Title: "my-server"}))
-        }
-        runMCPServer(ctx)
-    }
-}
-```
-
----
-
 ## Design
 
 See [DESIGN.md](DESIGN.md) for the full architecture.
+
+## License
+
+MIT
