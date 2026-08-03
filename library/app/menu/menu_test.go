@@ -8,16 +8,6 @@ import (
 	"github.com/sairaph/mcp-wizard/app/menu"
 )
 
-// compile-time interface check
-var _ app.Screen = (*menu.Model)(nil)
-
-func TestID(t *testing.T) {
-	m := menu.New("test", nil)
-	if m.ID() != "menu" {
-		t.Fatalf("expected ID 'menu', got %q", m.ID())
-	}
-}
-
 func TestInit(t *testing.T) {
 	items := []menu.Item{{Label: "a", Action: "a"}, {Label: "b", Action: "b"}}
 	built := false
@@ -35,19 +25,6 @@ func TestInit(t *testing.T) {
 	}
 }
 
-func TestFocusRebuildsItems(t *testing.T) {
-	callCount := 0
-	m := menu.New("test", func() []menu.Item {
-		callCount++
-		return []menu.Item{{Label: "x", Action: "x"}}
-	})
-
-	m.Focus()
-	if callCount != 1 {
-		t.Fatalf("expected buildFn called once, got %d", callCount)
-	}
-}
-
 func TestCursorMovement(t *testing.T) {
 	m := menu.New("test", func() []menu.Item {
 		return []menu.Item{
@@ -57,15 +34,20 @@ func TestCursorMovement(t *testing.T) {
 		}
 	})
 	m.Init()
-
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if m.Cursor != 0 {
+		t.Fatalf("expected cursor 0, got %d", m.Cursor)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if m.Cursor != 1 {
+		t.Fatalf("expected cursor 1 after down, got %d", m.Cursor)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if m.Cursor != 0 {
+		t.Fatalf("expected cursor 0 after up, got %d", m.Cursor)
+	}
 }
 
-func TestEnterReturnsError(t *testing.T) {
+func TestEnterReturnsAction(t *testing.T) {
 	m := menu.New("test", func() []menu.Item {
 		return []menu.Item{
 			{Label: "a", Action: "alpha"},
@@ -74,57 +56,31 @@ func TestEnterReturnsError(t *testing.T) {
 	})
 	m.Init()
 
-	cmd, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd != nil {
-		t.Fatal("expected nil cmd")
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected cmd")
 	}
-	if err == nil {
-		t.Fatal("expected error")
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
 	}
-	if err.Error() != "menu:select:alpha" {
-		t.Fatalf("expected 'menu:select:alpha', got %q", err.Error())
+	if am.Source != "menu" {
+		t.Fatalf("expected source 'menu', got %q", am.Source)
+	}
+	if am.Value != "select" {
+		t.Fatalf("expected value 'select', got %q", am.Value)
+	}
+	if am.Data != "alpha" {
+		t.Fatalf("expected data 'alpha', got %v", am.Data)
 	}
 
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	cmd, err = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err.Error() != "menu:select:beta" {
-		t.Fatalf("expected 'menu:select:beta', got %q", err.Error())
-	}
-}
-
-func TestQReturnsError(t *testing.T) {
-	m := menu.New("test", func() []menu.Item {
-		return []menu.Item{{Label: "a", Action: "a"}}
-	})
-	m.Init()
-
-	cmd, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if cmd != nil {
-		t.Fatal("expected nil cmd")
-	}
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if err.Error() != "menu:quit" {
-		t.Fatalf("expected 'menu:quit', got %q", err.Error())
-	}
-}
-
-func TestCtrlCReturnsError(t *testing.T) {
-	m := menu.New("test", func() []menu.Item {
-		return []menu.Item{{Label: "a", Action: "a"}}
-	})
-	m.Init()
-
-	cmd, err := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-	if cmd != nil {
-		t.Fatal("expected nil cmd")
-	}
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if err.Error() != "menu:quit" {
-		t.Fatalf("expected 'menu:quit', got %q", err.Error())
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	msg = cmd()
+	am = msg.(app.ActionMsg)
+	if am.Data != "beta" {
+		t.Fatalf("expected data 'beta', got %v", am.Data)
 	}
 }
 
@@ -137,7 +93,7 @@ func TestViewRenders(t *testing.T) {
 	})
 	m.Init()
 
-	v := m.View(80, 24)
+	v := m.View()
 	if v == "" {
 		t.Fatal("expected non-empty view")
 	}
@@ -150,20 +106,8 @@ func TestViewRenders(t *testing.T) {
 	if !contains(v, "Option 2") {
 		t.Fatal("expected Option 2 in view")
 	}
-	if !contains(v, "↑↓") {
+	if !contains(v, "\u2191\u2193") {
 		t.Fatal("expected help text in view")
-	}
-}
-
-func TestViewWithoutHelpWhenShort(t *testing.T) {
-	m := menu.New("T", func() []menu.Item {
-		return []menu.Item{{Label: "Only", Action: "o"}}
-	})
-	m.Init()
-
-	v := m.View(80, 1)
-	if contains(v, "↑↓") {
-		t.Fatal("expected no help text when height is too small")
 	}
 }
 

@@ -16,8 +16,8 @@ import (
 //go:embed all:templates
 var templateFS embed.FS
 
-var validOwner = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]?[A-Za-z0-9])*$|^[A-Za-z0-9]$`)
-var validName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var validOwner = regexp.MustCompile(`^[A-Za-z0-9_]([A-Za-z0-9_-]?[A-Za-z0-9_])*$|^[A-Za-z0-9_]$`)
+var validName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 
 var goKeywords = map[string]bool{
 	"break": true, "case": true, "chan": true, "const": true, "continue": true,
@@ -87,6 +87,7 @@ func main() {
 	subs := map[string]string{
 		"Name":       *name,
 		"Owner":      *owner,
+		"OwnerLower": strings.ToLower(*owner),
 		"ModulePath": modulePath,
 		"BinaryName": *name,
 		"ServerName": *name,

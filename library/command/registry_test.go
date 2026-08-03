@@ -182,6 +182,32 @@ func TestIsOneShot(t *testing.T) {
 	}
 }
 
+func TestRequiresDaemon(t *testing.T) {
+	r := command.New()
+	r.Register(command.Handler{
+		Name:           "daemon-cmd",
+		RequiresDaemon: true,
+		Run:            func(_ context.Context, _ []string) int { return 0 },
+	})
+	r.Register(command.Handler{
+		Name: "local-cmd",
+		Run:  func(_ context.Context, _ []string) int { return 0 },
+	})
+	list := r.List()
+	for _, h := range list {
+		switch h.Name {
+		case "daemon-cmd":
+			if !h.RequiresDaemon {
+				t.Error("expected RequiresDaemon=true for daemon-cmd")
+			}
+		case "local-cmd":
+			if h.RequiresDaemon {
+				t.Error("expected RequiresDaemon=false for local-cmd")
+			}
+		}
+	}
+}
+
 func TestDispatchPassesContextAndArgs(t *testing.T) {
 	r := command.New()
 	type key string

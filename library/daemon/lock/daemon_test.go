@@ -1,30 +1,29 @@
-package daemon_test
+package lock_test
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/sairaph/mcp-wizard/daemon"
+	"github.com/sairaph/mcp-wizard/daemon/lock"
 )
 
 func TestIsRunningReturnsFalseForNonExistentLockFile(t *testing.T) {
-	if daemon.IsRunning("/nonexistent/path/lock") {
+	if lock.IsRunning("/nonexistent/path/lock") {
 		t.Fatal("IsRunning should return false for non-existent lock file")
 	}
 }
 
 func TestOpenAndClose(t *testing.T) {
 	dir := t.TempDir()
-	opts := daemon.Options{
+	opts := lock.Options{
 		LockFile: filepath.Join(dir, "lock"),
-		PIDFile:  filepath.Join(dir, "daemon.pid"),
+		PIDFile:  filepath.Join(dir, "lock.pid"),
 	}
 
-	inst, err := daemon.Open(context.Background(), opts)
+	inst, err := lock.Open(opts)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -42,87 +41,36 @@ func TestOpenAndClose(t *testing.T) {
 
 func TestErrAlreadyRunningWhenOpeningTwice(t *testing.T) {
 	dir := t.TempDir()
-	opts := daemon.Options{
+	opts := lock.Options{
 		LockFile: filepath.Join(dir, "lock"),
 	}
 
-	inst, err := daemon.Open(context.Background(), opts)
+	inst, err := lock.Open(opts)
 	if err != nil {
 		t.Fatalf("first Open failed: %v", err)
 	}
 	defer inst.Close()
 
-	_, err = daemon.Open(context.Background(), opts)
-	if !errors.Is(err, daemon.ErrAlreadyRunning) {
+	_, err = lock.Open(opts)
+	if !errors.Is(err, lock.ErrAlreadyRunning) {
 		t.Fatalf("expected ErrAlreadyRunning, got %v", err)
 	}
 }
 
-func TestServeRunsFunctionAndReturnsItsError(t *testing.T) {
-	dir := t.TempDir()
-	opts := daemon.Options{
-		LockFile: filepath.Join(dir, "lock"),
-	}
-
-	inst, err := daemon.Open(context.Background(), opts)
-	if err != nil {
-		t.Fatalf("Open failed: %v", err)
-	}
-	defer inst.Close()
-
-	sentinel := errors.New("sentinel error")
-	got := inst.Serve(context.Background(), func(ctx context.Context) error {
-		return sentinel
-	})
-	if !errors.Is(got, sentinel) {
-		t.Fatalf("expected sentinel error, got %v", got)
-	}
-}
-
-func TestDoneChannelClosesAfterServeReturns(t *testing.T) {
-	dir := t.TempDir()
-	opts := daemon.Options{
-		LockFile: filepath.Join(dir, "lock"),
-	}
-
-	inst, err := daemon.Open(context.Background(), opts)
-	if err != nil {
-		t.Fatalf("Open failed: %v", err)
-	}
-	defer inst.Close()
-
-	done := inst.Done()
-	select {
-	case <-done:
-		t.Fatal("Done channel should not be closed before Serve returns")
-	default:
-	}
-
-	inst.Serve(context.Background(), func(ctx context.Context) error {
-		return nil
-	})
-
-	select {
-	case <-done:
-	default:
-		t.Fatal("Done channel should be closed after Serve returns")
-	}
-}
-
 func TestStaleAfterIsPositive(t *testing.T) {
-	if daemon.StaleAfter <= 0 {
+	if lock.StaleAfter <= 0 {
 		t.Fatal("StaleAfter must be positive")
 	}
 }
 
 func TestPIDFileWrittenAndCleanedUp(t *testing.T) {
 	dir := t.TempDir()
-	opts := daemon.Options{
+	opts := lock.Options{
 		LockFile: filepath.Join(dir, "lock"),
-		PIDFile:  filepath.Join(dir, "daemon.pid"),
+		PIDFile:  filepath.Join(dir, "lock.pid"),
 	}
 
-	inst, err := daemon.Open(context.Background(), opts)
+	inst, err := lock.Open(opts)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -150,12 +98,12 @@ func TestIsRunningStaleLock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	past := time.Now().Add(-(daemon.StaleAfter + time.Minute))
+	past := time.Now().Add(-(lock.StaleAfter + time.Minute))
 	if err := os.Chtimes(lockFile, past, past); err != nil {
 		t.Fatal(err)
 	}
 
-	if daemon.IsRunning(lockFile) {
+	if lock.IsRunning(lockFile) {
 		t.Fatal("IsRunning should return false for a stale lock file")
 	}
 }

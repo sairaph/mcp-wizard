@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/sairaph/mcp-wizard/app"
 	"github.com/sairaph/mcp-wizard/app/table"
 )
 
@@ -74,32 +75,32 @@ func TestCursorMovement(t *testing.T) {
 	})
 
 	// Move down
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	if m.Cursor != 1 {
 		t.Fatalf("Cursor after j = %d, want 1", m.Cursor)
 	}
 
 	// Move up
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
 	if m.Cursor != 0 {
 		t.Fatalf("Cursor after k = %d, want 0", m.Cursor)
 	}
 
 	// up at top does nothing
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
 	if m.Cursor != 0 {
 		t.Fatalf("Cursor at top after k = %d, want 0", m.Cursor)
 	}
 
 	// Move to last
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	if m.Cursor != 2 {
 		t.Fatalf("Cursor at last = %d, want 2", m.Cursor)
 	}
 
 	// down at bottom does nothing
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	if m.Cursor != 2 {
 		t.Fatalf("Cursor at bottom after j = %d, want 2", m.Cursor)
 	}
@@ -112,43 +113,18 @@ func TestCursorArrowKeys(t *testing.T) {
 		{"A"}, {"B"},
 	})
 
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	if m.Cursor != 0 {
 		t.Fatalf("Cursor after up = %d, want 0", m.Cursor)
 	}
 
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if m.Cursor != 1 {
 		t.Fatalf("Cursor after down = %d, want 1", m.Cursor)
 	}
 }
 
-func TestSortToggle(t *testing.T) {
-	m := table.New("", []table.Column{
-		{Name: "Name", Width: 10},
-	}, []table.Row{
-		{"Alice"},
-	})
-
-	// Default descending (Go zero value)
-	if m.SortAsc {
-		t.Fatal("SortAsc = true, want false")
-	}
-
-	// Toggle to ascending
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	if !m.SortAsc {
-		t.Fatal("SortAsc after s = false, want true")
-	}
-
-	// Toggle back to descending
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	if m.SortAsc {
-		t.Fatal("SortAsc after second s = true, want false")
-	}
-}
-
-func TestEnterReturnsError(t *testing.T) {
+func TestEnterReturnsAction(t *testing.T) {
 	m := table.New("", []table.Column{
 		{Name: "Name", Width: 10},
 	}, []table.Row{
@@ -156,12 +132,23 @@ func TestEnterReturnsError(t *testing.T) {
 		{"Bob"},
 	})
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err == nil {
-		t.Fatal("expected error on enter, got nil")
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected cmd on enter, got nil")
 	}
-	if !strings.Contains(err.Error(), "table:select:0") {
-		t.Fatalf("error = %q, want to contain %q", err.Error(), "table:select:0")
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
+	}
+	if am.Source != "table" {
+		t.Fatalf("expected source 'table', got %q", am.Source)
+	}
+	if am.Value != "select" {
+		t.Fatalf("expected value 'select', got %q", am.Value)
+	}
+	if am.Data != 0 {
+		t.Fatalf("expected data 0, got %v", am.Data)
 	}
 }
 
@@ -170,9 +157,9 @@ func TestEnterOnEmptyRows(t *testing.T) {
 		{Name: "Name", Width: 10},
 	}, []table.Row{})
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err != nil {
-		t.Fatalf("expected nil error on empty rows, got %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatalf("expected nil cmd on empty rows, got %v", cmd)
 	}
 }
 
@@ -224,7 +211,7 @@ func TestWindowSizeMsg(t *testing.T) {
 		{"Alice"},
 	})
 
-	_, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	if m.Width != 120 {
 		t.Fatalf("Width = %d, want 120", m.Width)
 	}
@@ -241,8 +228,8 @@ func TestPageUpDown(t *testing.T) {
 	})
 
 	// pgup should not panic on small data
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
 }
 
 func TestSortIndicatorInView(t *testing.T) {
@@ -254,14 +241,14 @@ func TestSortIndicatorInView(t *testing.T) {
 
 	// Default is descending (SortAsc = false)
 	v := m.View()
-	if !strings.Contains(v, "▼") {
+	if !strings.Contains(v, "\u25bc") {
 		t.Fatalf("Expected descending sort indicator in View, got: %q", v)
 	}
 
 	m.SortAsc = true
 	m.SetRows(m.Rows)
 	v = m.View()
-	if !strings.Contains(v, "▲") {
+	if !strings.Contains(v, "\u25b2") {
 		t.Fatalf("Expected ascending sort indicator in View, got: %q", v)
 	}
 }

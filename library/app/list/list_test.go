@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sairaph/mcp-wizard/app"
 	"github.com/sairaph/mcp-wizard/app/list"
 )
 
@@ -77,8 +78,8 @@ func TestCursorMovement(t *testing.T) {
 	})
 
 	tests := []struct {
-		key    string
-		want   int
+		key  string
+		want int
 	}{
 		{"down", 1},
 		{"j", 2},
@@ -91,9 +92,9 @@ func TestCursorMovement(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
-		if err != nil {
-			t.Fatalf("unexpected error on %q: %v", tt.key, err)
+		cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
+		if cmd != nil {
+			t.Fatalf("unexpected cmd on %q: %v", tt.key, cmd)
 		}
 		if m.Cursor != tt.want {
 			t.Errorf("key %q: expected cursor %d, got %d", tt.key, tt.want, m.Cursor)
@@ -106,51 +107,61 @@ func TestCursorBounds(t *testing.T) {
 	m.SetItems([]list.Item{{Label: "a"}})
 
 	// should not go below 0
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("up")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("up")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Cursor != 0 {
 		t.Errorf("expected cursor 0 at top bound, got %d", m.Cursor)
 	}
 
 	// should not go above len-1
-	_, err = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Cursor != 0 {
 		t.Errorf("expected cursor 0 at bottom bound, got %d", m.Cursor)
 	}
 }
 
-func TestEnterReturnsSelectError(t *testing.T) {
+func TestEnterReturnsSelectAction(t *testing.T) {
 	m := list.New("test", nil, 0, 10, 5)
 	m.SetItems([]list.Item{{Label: "a"}, {Label: "b"}})
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err == nil {
-		t.Fatal("expected select error on enter")
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected cmd on enter")
 	}
-	if err.Error() != "list:select:0" {
-		t.Errorf("unexpected error: %v", err)
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
+	}
+	if am.Source != "list" {
+		t.Fatalf("expected source 'list', got %q", am.Source)
+	}
+	if am.Value != "select" {
+		t.Fatalf("expected value 'select', got %q", am.Value)
+	}
+	if am.Data != 0 {
+		t.Fatalf("expected data 0, got %v", am.Data)
 	}
 
 	m.Cursor = 1
-	_, err = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err == nil {
-		t.Fatal("expected select error on enter")
-	}
-	if err.Error() != "list:select:1" {
-		t.Errorf("unexpected error: %v", err)
+	cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	msg = cmd()
+	am = msg.(app.ActionMsg)
+	if am.Data != 1 {
+		t.Fatalf("expected data 1, got %v", am.Data)
 	}
 }
 
-func TestEnterOnEmptyNoError(t *testing.T) {
+func TestEnterOnEmptyNoAction(t *testing.T) {
 	m := list.New("test", nil, 0, 10, 5)
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err != nil {
-		t.Errorf("expected no error on enter with empty list, got %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Errorf("expected nil cmd on enter with empty list, got %v", cmd)
 	}
 }
 
@@ -185,9 +196,9 @@ func TestViewWithItems(t *testing.T) {
 
 func TestWindowSize(t *testing.T) {
 	m := list.New("test", nil, 0, 10, 5)
-	_, err := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Width != 100 {
 		t.Errorf("expected Width 100, got %d", m.Width)

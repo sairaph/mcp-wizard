@@ -13,7 +13,10 @@ import (
 
 // CredentialPath returns the path where credentials are stored.
 func CredentialPath() string {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return filepath.Join(".${BinaryName}", "credentials.json")
+	}
 	return filepath.Join(home, ".${BinaryName}", "credentials.json")
 }
 

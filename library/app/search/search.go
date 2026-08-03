@@ -1,4 +1,4 @@
-// Package search provides a search screen with query input and results.
+// Package search provides a search component with query input and results.
 package search
 
 import (
@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sairaph/mcp-wizard/app"
 )
 
 // Result is one search result item.
@@ -41,7 +42,7 @@ func New(title string) *Model {
 	ti.Placeholder = "Search..."
 	ti.Focus()
 
-	return &Model{
+	m := &Model{
 		Title:   title,
 		Input:   ti,
 		Width:   80,
@@ -50,6 +51,8 @@ func New(title string) *Model {
 		styleDim:    lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
 		styleCursor: lipgloss.NewStyle().Foreground(lipgloss.Color("81")),
 	}
+	m.Viewport = viewport.New(80, 10)
+	return m
 }
 
 // SetResults updates the result list.
@@ -57,6 +60,7 @@ func (m *Model) SetResults(results []Result) {
 	m.Results = results
 	m.Cursor = 0
 	m.Searching = false
+	m.Viewport.GotoTop()
 	m.renderResults()
 }
 
@@ -75,7 +79,9 @@ func (m *Model) renderResults() {
 	m.Viewport.SetContent(out.String())
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
+func (m *Model) Init() tea.Cmd { return nil }
+
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
@@ -87,29 +93,41 @@ func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
 		switch msg.String() {
 		case "enter":
 			if m.Searching {
-				return nil, nil
+				return nil
 			}
 			m.Searching = true
 			m.Query = m.Input.Value()
-			return nil, fmt.Errorf("search:query:%s", m.Query)
-		case "up", "k":
+			return app.Action("search", "query", m.Query)
+		case "up":
 			if m.Cursor > 0 {
 				m.Cursor--
 				m.renderResults()
 			}
-		case "down", "j":
+			return nil
+		case "down":
 			if m.Cursor < len(m.Results)-1 {
 				m.Cursor++
 				m.renderResults()
 			}
+			return nil
+		case "home", "g":
+			m.Cursor = 0
+			m.Viewport.GotoTop()
+			m.renderResults()
+		case "end", "G":
+			if len(m.Results) > 0 {
+				m.Cursor = len(m.Results) - 1
+				m.Viewport.GotoBottom()
+				m.renderResults()
+			}
 		case "esc":
-			return nil, fmt.Errorf("search:cancelled")
+			return app.Action("search", "cancelled")
 		}
 	}
 
 	var cmd tea.Cmd
 	m.Input, cmd = m.Input.Update(msg)
-	return cmd, nil
+	return cmd
 }
 
 func (m *Model) View() string {
@@ -126,7 +144,7 @@ func (m *Model) View() string {
 		out.WriteString("\n")
 		out.WriteString(m.Viewport.View())
 		out.WriteString("\n")
-		out.WriteString(m.styleDim.Render(fmt.Sprintf("  %d results  ↑↓ move · enter select · esc back", len(m.Results))))
+		out.WriteString(m.styleDim.Render(fmt.Sprintf("  %d results  \u2191\u2193 move \u00b7 enter select \u00b7 esc back", len(m.Results))))
 	}
 
 	return out.String()

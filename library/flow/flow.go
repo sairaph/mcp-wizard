@@ -137,7 +137,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.flow.flowFailure = fmt.Errorf("flow: step %q returned Fail on quit", m.step.ID())
 			}
 		}
-		return m, cmd
+		return m, tea.Batch(cmd, tea.Quit)
 	}
 
 	directive, cmd := m.step.Update(msg, m.flow.state)

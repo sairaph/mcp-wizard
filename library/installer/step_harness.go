@@ -98,6 +98,12 @@ func (s *harnessStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd)
 			}
 		}
 		hState.Cursor = FirstSelectable(msg.harnesses)
+		if hState.Cursor < 0 {
+			indices := VisibleIndices(msg.harnesses, false)
+			if len(indices) > 0 {
+				hState.Cursor = indices[0]
+			}
+		}
 		s.ready = true
 		return flow.Continue, nil
 
@@ -147,7 +153,7 @@ func (s *harnessStep[T]) View(state *T) string {
 	}
 
 	if !s.ready {
-		return tui.Section(tui.DefaultTheme, "", "  "+tui.SpinFrame(0)+" Initialising, looking for AI clients...\n")
+		return tui.Section(tui.DefaultTheme, "", "  Initialising, looking for AI clients...\n")
 	}
 
 	indices := VisibleIndices(hState.Detections, hState.ShowAll)
@@ -216,7 +222,7 @@ func FirstSelectable(harnesses []harness.Harness) int {
 			return i
 		}
 	}
-	return 0
+	return -1
 }
 
 func MoveCursor(state *HarnessState, harnesses []harness.Harness, dir int) {
@@ -242,7 +248,7 @@ func MoveCursor(state *HarnessState, harnesses []harness.Harness, dir int) {
 }
 
 func ToggleHarness(state *HarnessState) {
-	if state.Cursor >= len(state.Detections) {
+	if state == nil || state.Cursor < 0 || state.Cursor >= len(state.Detections) {
 		return
 	}
 	h := state.Detections[state.Cursor]
@@ -253,6 +259,9 @@ func ToggleHarness(state *HarnessState) {
 }
 
 func ToggleAll(state *HarnessState) {
+	if state == nil || state.Selected == nil {
+		state.Selected = make(map[harness.ID]bool)
+	}
 	anyUnselected := false
 	for _, h := range state.Detections {
 		if h.Selectable() && !state.Selected[h.ID] {

@@ -1,9 +1,8 @@
-// Package daemon provides lifecycle management for background daemon processes.
+// Package lock provides file-lock-based daemon lifecycle management.
 // It handles lock acquisition, PID tracking, autostart, and graceful shutdown.
-package daemon
+package lock
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -35,13 +34,11 @@ type Instance struct {
 	opts   Options
 	lock   *flock.Flock
 	locked bool
-	cancel context.CancelFunc
-	done   chan struct{}
 }
 
 // Open acquires the daemon lock and starts the instance.
 // Returns ErrAlreadyRunning if the lock is held by another process.
-func Open(ctx context.Context, opts Options) (*Instance, error) {
+func Open(opts Options) (*Instance, error) {
 	if err := os.MkdirAll(filepath.Dir(opts.LockFile), 0700); err != nil {
 		return nil, fmt.Errorf("create daemon directory: %w", err)
 	}
@@ -55,13 +52,10 @@ func Open(ctx context.Context, opts Options) (*Instance, error) {
 		return nil, ErrAlreadyRunning
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
 	inst := &Instance{
 		opts:   opts,
 		lock:   lock,
 		locked: true,
-		cancel: cancel,
-		done:   make(chan struct{}),
 	}
 
 	if opts.PIDFile != "" {
@@ -74,18 +68,8 @@ func Open(ctx context.Context, opts Options) (*Instance, error) {
 	return inst, nil
 }
 
-// Serve runs the daemon loop. The function should block until ctx is done.
-// Returns the error from serve or nil on clean shutdown.
-func (inst *Instance) Serve(ctx context.Context, serve func(context.Context) error) error {
-	defer close(inst.done)
-	return serve(ctx)
-}
-
 // Close releases the daemon lock and cleans up.
 func (inst *Instance) Close() {
-	if inst.cancel != nil {
-		inst.cancel()
-	}
 	if inst.locked {
 		inst.lock.Unlock()
 		inst.locked = false
@@ -95,27 +79,28 @@ func (inst *Instance) Close() {
 	}
 }
 
-// Done returns a channel that is closed when Serve returns.
-func (inst *Instance) Done() <-chan struct{} {
-	return inst.done
-}
-
 // StaleAfter is the duration after which a lock file is considered stale.
 const StaleAfter = 5 * time.Minute
 
-// IsRunning reports whether a daemon is running by checking the lock file.
-// A stale lock (older than StaleAfter) is considered not running.
+// IsRunning reports whether a daemon is running by trying to acquire the lock.
+// If the lock cannot be acquired, the daemon is considered running.
 func IsRunning(lockFile string) bool {
-	info, err := os.Stat(lockFile)
+	lock := flock.New(lockFile)
+	locked, err := lock.TryLock()
 	if err != nil {
 		return false
 	}
-	return time.Since(info.ModTime()) <= StaleAfter
+	if locked {
+		lock.Unlock()
+		return false // lock was free — daemon is not running
+	}
+	return true // lock is held — daemon is running
 }
 
 // Stop stops a running daemon by sending a signal to the PID in the PID file.
 // Returns nil if the daemon was stopped, or an error if it couldn't be stopped.
 func Stop(pidFile, lockFile string) error {
+	stopped := false
 	if pidFile != "" {
 		data, err := os.ReadFile(pidFile)
 		if err == nil {
@@ -124,14 +109,29 @@ func Stop(pidFile, lockFile string) error {
 				proc, err := os.FindProcess(pid)
 				if err == nil {
 					if err := proc.Signal(os.Interrupt); err == nil {
-						return nil
+						done := make(chan struct{})
+						go func() {
+							proc.Wait()
+							close(done)
+						}()
+						select {
+						case <-done:
+							stopped = true
+						case <-time.After(3 * time.Second):
+							proc.Signal(os.Kill)
+							<-done
+							stopped = true
+						}
 					}
 				}
 			}
 		}
 	}
-	if lockFile != "" {
+	if stopped && lockFile != "" {
 		os.Remove(lockFile)
 	}
-	return fmt.Errorf("daemon: could not stop process")
+	if !stopped {
+		return fmt.Errorf("daemon: could not stop process")
+	}
+	return nil
 }

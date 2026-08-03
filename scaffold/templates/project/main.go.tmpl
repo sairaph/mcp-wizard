@@ -39,12 +39,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	command, err := cli.Parse(os.Args[1:])
+	cmd, err := cli.Parse(os.Args[1:])
 	if err != nil {
 		os.Exit(2)
 	}
 
-	switch command.Name {
+	switch cmd.Name {
 	case "mcp", "server", "serve":
 		runMCPServer(ctx)
 	case "install", "configure":
@@ -70,7 +70,7 @@ func main() {
 		fmt.Println(version)
 	default:
 		// One-shot commands registered via command.Registry.
-		if ok, code := oneShotCommands.Dispatch(ctx, command.Name, command.Args); ok {
+		if ok, code := oneShotCommands.Dispatch(ctx, cmd.Name, cmd.Args); ok {
 			os.Exit(code)
 		}
 		// Bare invocation: app or MCP server.
@@ -149,8 +149,16 @@ func runUnattended(ctx context.Context, detector *harness.Detector, credStore se
 // --- Uninstall ---
 
 func runUninstall(ctx context.Context, command cli.Command) int {
-	exec, _ := harness.ResolveExecutable()
-	detector, _ := harness.New(harness.ServerSpec{Name: "${ServerName}", Command: exec, Args: []string{"mcp"}})
+	exec, err := harness.ResolveExecutable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	detector, err := harness.New(harness.ServerSpec{Name: "${ServerName}", Command: exec, Args: []string{"mcp"}})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	harnesses := detector.Detect(ctx)
 	var ids []harness.ID
 	for _, h := range harnesses {

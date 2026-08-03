@@ -8,16 +8,6 @@ import (
 	"github.com/sairaph/mcp-wizard/app/confirm"
 )
 
-// compile-time interface check
-var _ app.Screen = (*confirm.Model)(nil)
-
-func TestID(t *testing.T) {
-	c := confirm.New("title", "detail", "Yes", "No")
-	if c.ID() != "confirm" {
-		t.Fatalf("expected ID 'confirm', got %q", c.ID())
-	}
-}
-
 func TestInit(t *testing.T) {
 	c := confirm.New("title", "detail", "Yes", "No")
 	cmd := c.Init()
@@ -29,105 +19,107 @@ func TestInit(t *testing.T) {
 func TestCursorMovement(t *testing.T) {
 	c := confirm.New("title", "detail", "Yes", "No")
 
-	cmd, err := c.Update(tea.KeyMsg{Type: tea.KeyDown})
+	cmd := c.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if cmd != nil {
 		t.Fatal("expected nil cmd")
-	}
-	if err != nil {
-		t.Fatal("expected no error")
 	}
 
-	cmd, err = c.Update(tea.KeyMsg{Type: tea.KeyUp})
+	cmd = c.Update(tea.KeyMsg{Type: tea.KeyUp})
 	if cmd != nil {
 		t.Fatal("expected nil cmd")
-	}
-	if err != nil {
-		t.Fatal("expected no error")
 	}
 
-	cmd, err = c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	cmd = c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	if cmd != nil {
 		t.Fatal("expected nil cmd")
-	}
-	if err != nil {
-		t.Fatal("expected no error")
 	}
 
-	cmd, err = c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	cmd = c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	if cmd != nil {
 		t.Fatal("expected nil cmd")
-	}
-	if err != nil {
-		t.Fatal("expected no error")
 	}
 }
 
-func TestEnterConfirmReturnsError(t *testing.T) {
+func TestEnterConfirmReturnsAction(t *testing.T) {
 	c := confirm.New("title", "detail", "Yes", "No")
 
-	cmd, err := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd != nil {
-		t.Fatal("expected nil cmd")
+	cmd := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected cmd")
 	}
-	if err == nil {
-		t.Fatal("expected error")
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
 	}
-	if err.Error() != "confirm:confirmed" {
-		t.Fatalf("expected 'confirm:confirmed', got %q", err.Error())
+	if am.Source != "confirm" {
+		t.Fatalf("expected source 'confirm', got %q", am.Source)
+	}
+	if am.Value != "confirmed" {
+		t.Fatalf("expected value 'confirmed', got %q", am.Value)
 	}
 }
 
-func TestEnterCancelReturnsError(t *testing.T) {
+func TestEnterCancelReturnsAction(t *testing.T) {
 	c := confirm.New("title", "detail", "Yes", "No")
 
-	_, _ = c.Update(tea.KeyMsg{Type: tea.KeyDown})
+	c.Update(tea.KeyMsg{Type: tea.KeyDown})
 
-	cmd, err := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd != nil {
-		t.Fatal("expected nil cmd")
+	cmd := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected cmd")
 	}
-	if err == nil {
-		t.Fatal("expected error")
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
 	}
-	if err.Error() != "confirm:cancelled" {
-		t.Fatalf("expected 'confirm:cancelled', got %q", err.Error())
+	if am.Source != "confirm" {
+		t.Fatalf("expected source 'confirm', got %q", am.Source)
+	}
+	if am.Value != "cancelled" {
+		t.Fatalf("expected value 'cancelled', got %q", am.Value)
 	}
 }
 
-func TestEscReturnsError(t *testing.T) {
+func TestEscReturnsAction(t *testing.T) {
 	c := confirm.New("title", "detail", "Yes", "No")
 
-	cmd, err := c.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if cmd != nil {
-		t.Fatal("expected nil cmd")
+	cmd := c.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("expected cmd")
 	}
-	if err == nil {
-		t.Fatal("expected error")
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
 	}
-	if err.Error() != "confirm:cancelled" {
-		t.Fatalf("expected 'confirm:cancelled', got %q", err.Error())
+	if am.Value != "cancelled" {
+		t.Fatalf("expected value 'cancelled', got %q", am.Value)
 	}
 }
 
-func TestQReturnsError(t *testing.T) {
+func TestQReturnsAction(t *testing.T) {
 	c := confirm.New("title", "detail", "Yes", "No")
 
-	cmd, err := c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if cmd != nil {
-		t.Fatal("expected nil cmd")
+	cmd := c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if cmd == nil {
+		t.Fatal("expected cmd")
 	}
-	if err == nil {
-		t.Fatal("expected error")
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
 	}
-	if err.Error() != "confirm:cancelled" {
-		t.Fatalf("expected 'confirm:cancelled', got %q", err.Error())
+	if am.Value != "cancelled" {
+		t.Fatalf("expected value 'cancelled', got %q", am.Value)
 	}
 }
 
 func TestViewRenders(t *testing.T) {
 	c := confirm.New("Confirm Title", "Are you sure?", "Yes", "No")
 
-	v := c.View(80, 24)
+	v := c.View()
 	if v == "" {
 		t.Fatal("expected non-empty view")
 	}
@@ -143,7 +135,7 @@ func TestViewRenders(t *testing.T) {
 	if !contains(v, "No") {
 		t.Fatal("expected No in view")
 	}
-	if !contains(v, "↑↓") {
+	if !contains(v, "\u2191\u2193") {
 		t.Fatal("expected help text in view")
 	}
 }
@@ -151,7 +143,7 @@ func TestViewRenders(t *testing.T) {
 func TestViewWithoutDetail(t *testing.T) {
 	c := confirm.New("Confirm Title", "", "Y", "N")
 
-	v := c.View(80, 24)
+	v := c.View()
 	if !contains(v, "Y") {
 		t.Fatal("expected Y in view")
 	}

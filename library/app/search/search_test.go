@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sairaph/mcp-wizard/app"
 	"github.com/sairaph/mcp-wizard/app/search"
 )
 
@@ -57,15 +58,15 @@ func TestCursorMovement(t *testing.T) {
 		want int
 	}{
 		{"down", 1},
-		{"j", 2},
+		{"down", 2},
 		{"up", 1},
-		{"k", 0},
+		{"up", 0},
 	}
 
 	for _, tt := range tests {
-		_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
-		if err != nil {
-			t.Fatalf("unexpected error on %q: %v", tt.key, err)
+		cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
+		if cmd != nil {
+			t.Fatalf("unexpected cmd on %q: %v", tt.key, cmd)
 		}
 		if m.Cursor != tt.want {
 			t.Errorf("key %q: expected cursor %d, got %d", tt.key, tt.want, m.Cursor)
@@ -78,18 +79,18 @@ func TestCursorBounds(t *testing.T) {
 	m.SetResults([]search.Result{{Label: "only"}})
 
 	// should not go below 0
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("up")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("up")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Cursor != 0 {
 		t.Errorf("expected cursor 0 at top bound, got %d", m.Cursor)
 	}
 
 	// should not go above len-1
-	_, err = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Cursor != 0 {
 		t.Errorf("expected cursor 0 at bottom bound, got %d", m.Cursor)
@@ -100,12 +101,23 @@ func TestEnterTriggersSearch(t *testing.T) {
 	m := search.New("Test")
 	m.Input.SetValue("hello")
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err == nil {
-		t.Fatal("expected search error on enter")
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected cmd on enter")
 	}
-	if err.Error() != "search:query:hello" {
-		t.Errorf("expected 'search:query:hello', got %v", err)
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
+	}
+	if am.Source != "search" {
+		t.Fatalf("expected source 'search', got %q", am.Source)
+	}
+	if am.Value != "query" {
+		t.Fatalf("expected value 'query', got %q", am.Value)
+	}
+	if am.Data != "hello" {
+		t.Fatalf("expected data 'hello', got %v", am.Data)
 	}
 	if !m.Searching {
 		t.Error("expected Searching to be true after enter")
@@ -119,32 +131,34 @@ func TestEnterWhileSearchingDoesNothing(t *testing.T) {
 	m := search.New("Test")
 	m.Searching = true
 
-	cmd, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err != nil {
-		t.Errorf("expected no error when already searching, got %v", err)
-	}
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd != nil {
-		t.Error("expected nil cmd when already searching")
+		t.Errorf("expected nil cmd when already searching, got %v", cmd)
 	}
 }
 
 func TestEscCancels(t *testing.T) {
 	m := search.New("Test")
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if err == nil {
-		t.Fatal("expected cancel error")
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("expected cmd on cancel")
 	}
-	if err.Error() != "search:cancelled" {
-		t.Errorf("expected 'search:cancelled', got %v", err)
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
+	}
+	if am.Value != "cancelled" {
+		t.Fatalf("expected value 'cancelled', got %q", am.Value)
 	}
 }
 
 func TestWindowSize(t *testing.T) {
 	m := search.New("Test")
-	_, err := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Width != 100 {
 		t.Errorf("expected Width 100, got %d", m.Width)

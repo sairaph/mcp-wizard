@@ -51,6 +51,9 @@ func NewFileStore(path string) *FileStore {
 }
 
 func (s *FileStore) Save(ctx context.Context, sess *Session) error {
+	if s == nil {
+		return errors.New("secret: nil FileStore")
+	}
 	if sess == nil {
 		return errors.New("secret: cannot save nil session")
 	}
@@ -93,6 +96,9 @@ func (s *FileStore) Save(ctx context.Context, sess *Session) error {
 }
 
 func (s *FileStore) Load(ctx context.Context) (*Session, bool, error) {
+	if s == nil {
+		return nil, false, errors.New("secret: nil FileStore")
+	}
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return NewSession(), false, nil
@@ -112,6 +118,9 @@ func (s *FileStore) Load(ctx context.Context) (*Session, bool, error) {
 }
 
 func (s *FileStore) Delete(ctx context.Context) error {
+	if s == nil {
+		return errors.New("secret: nil FileStore")
+	}
 	err := os.Remove(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -119,7 +128,12 @@ func (s *FileStore) Delete(ctx context.Context) error {
 	return err
 }
 
-func (s *FileStore) Path() string { return s.path }
+func (s *FileStore) Path() string {
+	if s == nil {
+		return ""
+	}
+	return s.path
+}
 
 // EnvStore reads credentials from environment variables.
 // It is read-only (Save and Delete are no-ops) and intended for
@@ -138,6 +152,9 @@ func NewEnvStore(mapping map[string]string) *EnvStore {
 func (s *EnvStore) Save(_ context.Context, _ *Session) error { return nil }
 
 func (s *EnvStore) Load(_ context.Context) (*Session, bool, error) {
+	if s == nil || s.mapping == nil {
+		return NewSession(), false, nil
+	}
 	sess := NewSession()
 	found := false
 	for key, envName := range s.mapping {

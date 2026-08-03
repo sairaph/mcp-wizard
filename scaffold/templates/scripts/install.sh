@@ -41,7 +41,7 @@ download_failed() {
 }
 
 if command -v curl >/dev/null 2>&1; then
-  curl -fSL --progress-bar "$URL" -o "$TEMP" 2>"$TEMP.err" || download_failed "$(cat "$TEMP.err" 2>/dev/null | tr '\n' ' ')"
+  curl -fSL --progress-bar "$URL" -o "$TEMP" 2>/dev/null || download_failed
 elif command -v wget >/dev/null 2>&1; then
   if ! wget -q --show-progress -O "$TEMP" "$URL" 2>"$TEMP.err"; then
     if ! wget -q -O "$TEMP" "$URL" 2>"$TEMP.err"; then

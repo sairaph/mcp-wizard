@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/sairaph/mcp-wizard/app"
 	"github.com/sairaph/mcp-wizard/app/form"
 )
 
@@ -44,26 +45,26 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("expected focused 0, got %d", m.Focused)
 	}
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("tab")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("tab")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Focused != 1 {
 		t.Errorf("expected focused 1 after tab, got %d", m.Focused)
 	}
 
-	_, err = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("tab")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("tab")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Focused != 2 {
 		t.Errorf("expected focused 2 after second tab, got %d", m.Focused)
 	}
 
 	// wrap around
-	_, err = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("tab")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("tab")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Focused != 0 {
 		t.Errorf("expected focused 0 after wrap, got %d", m.Focused)
@@ -79,9 +80,9 @@ func TestShiftTabCyclesBackwards(t *testing.T) {
 	m.Focused = 2
 	m.Inputs[2].Focus()
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("shift+tab")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("shift+tab")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Focused != 1 {
 		t.Errorf("expected focused 1, got %d", m.Focused)
@@ -97,9 +98,9 @@ func TestUpCyclesBackwards(t *testing.T) {
 	m.Focused = 2
 	m.Inputs[2].Focus()
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("up")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("up")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Focused != 1 {
 		t.Errorf("expected focused 1, got %d", m.Focused)
@@ -113,9 +114,9 @@ func TestDownCyclesForward(t *testing.T) {
 		{Label: "C"},
 	})
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Focused != 1 {
 		t.Errorf("expected focused 1, got %d", m.Focused)
@@ -133,9 +134,9 @@ func TestEnterWithValidationError(t *testing.T) {
 		{Label: "Age"},
 	})
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err != nil {
-		t.Fatalf("expected no error (validation should prevent submit), got %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatalf("expected nil cmd (validation should prevent submit), got %v", cmd)
 	}
 	if m.Submitted {
 		t.Fatal("expected form not submitted after validation failure")
@@ -154,12 +155,20 @@ func TestEnterWithoutValidationSubmits(t *testing.T) {
 		{Label: "Age"},
 	})
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err == nil {
-		t.Fatal("expected submit error")
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected cmd on submit")
 	}
-	if err.Error() != "form:submitted" {
-		t.Errorf("expected 'form:submitted', got %v", err)
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
+	}
+	if am.Source != "form" {
+		t.Fatalf("expected source 'form', got %q", am.Source)
+	}
+	if am.Value != "submitted" {
+		t.Fatalf("expected value 'submitted', got %q", am.Value)
 	}
 	if !m.Submitted {
 		t.Fatal("expected form to be submitted")
@@ -171,12 +180,17 @@ func TestEscCancels(t *testing.T) {
 		{Label: "Name"},
 	})
 
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if err == nil {
-		t.Fatal("expected cancel error")
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("expected cmd on cancel")
 	}
-	if err.Error() != "form:cancelled" {
-		t.Errorf("expected 'form:cancelled', got %v", err)
+	msg := cmd()
+	am, ok := msg.(app.ActionMsg)
+	if !ok {
+		t.Fatalf("expected app.ActionMsg, got %T", msg)
+	}
+	if am.Value != "cancelled" {
+		t.Fatalf("expected value 'cancelled', got %q", am.Value)
 	}
 }
 
@@ -203,11 +217,8 @@ func TestSubmittedIgnoresInput(t *testing.T) {
 	m := form.New("Test", []form.Field{{Label: "A"}})
 	m.Submitted = true
 
-	cmd, err := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if err != nil {
-		t.Errorf("expected no error after submit, got %v", err)
-	}
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd != nil {
-		t.Error("expected nil cmd after submit")
+		t.Errorf("expected nil cmd after submit, got %v", cmd)
 	}
 }

@@ -1,11 +1,11 @@
-//go:build !windows
+//go:build windows
 
-package daemon
+package lock
 
 import "syscall"
 
 func detachAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{
-		Setpgid: true,
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
 	}
 }

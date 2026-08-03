@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sairaph/mcp-wizard/app"
 )
 
 // Model is the detail view state.
@@ -45,7 +46,9 @@ func (m *Model) SetContent(content string) {
 	m.Viewport.GotoTop()
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
+func (m *Model) Init() tea.Cmd { return nil }
+
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
@@ -53,11 +56,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
 		m.Viewport.Width = msg.Width
 		m.Viewport.Height = msg.Height - 3
 		m.Viewport.SetContent(m.Content)
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			return app.Action("detail", "back")
+		}
 	}
 
 	var cmd tea.Cmd
 	m.Viewport, cmd = m.Viewport.Update(msg)
-	return cmd, nil
+	return cmd
 }
 
 func (m *Model) View() string {
@@ -67,6 +76,6 @@ func (m *Model) View() string {
 	}
 	out.WriteString(m.Viewport.View())
 	out.WriteString("\n")
-	out.WriteString(m.styleDim.Render(fmt.Sprintf("  %.0f%%  ↑↓ pgup/pgdn scroll · esc back", m.Viewport.ScrollPercent()*100)))
+	out.WriteString(m.styleDim.Render(fmt.Sprintf("  %.0f%%  \u2191\u2193 pgup/pgdn scroll \u00b7 esc back", m.Viewport.ScrollPercent()*100)))
 	return out.String()
 }

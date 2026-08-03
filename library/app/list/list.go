@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sairaph/mcp-wizard/app"
 )
 
 // Item is one row in the list.
@@ -75,6 +76,8 @@ func (m *Model) Selected() int {
 	return m.Cursor
 }
 
+func (m *Model) Init() tea.Cmd { return nil }
+
 func (m *Model) render() {
 	var out strings.Builder
 	for i, item := range m.Items {
@@ -82,9 +85,9 @@ func (m *Model) render() {
 		if i == m.Cursor {
 			prefix = m.styleCursor.Render("> ")
 		}
-		dot := m.styleOff.Render("○")
+		dot := m.styleOff.Render("\u25cb")
 		if item.Active {
-			dot = m.styleOn.Render("●")
+			dot = m.styleOn.Render("\u25cf")
 		}
 		line := fmt.Sprintf("%s %s %s", prefix, dot, item.Label)
 		out.WriteString(line + "\n")
@@ -95,7 +98,7 @@ func (m *Model) render() {
 	m.Viewport.SetContent(out.String())
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
@@ -109,33 +112,43 @@ func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
 		case "up", "k":
 			if m.Cursor > 0 {
 				m.Cursor--
+				m.Viewport.LineUp(1)
 				m.render()
 			}
 		case "down", "j":
 			if m.Cursor < len(m.Items)-1 {
 				m.Cursor++
+				m.Viewport.LineDown(1)
 				m.render()
 			}
 		case "pgup":
 			m.Viewport.ViewUp()
+			m.render()
 		case "pgdown":
 			m.Viewport.ViewDown()
+			m.render()
 		case "home", "g":
 			m.Cursor = 0
+			m.Viewport.GotoTop()
 			m.render()
 		case "end", "G":
-			m.Cursor = len(m.Items) - 1
-			m.render()
+			if len(m.Items) > 0 {
+				m.Cursor = len(m.Items) - 1
+				m.Viewport.GotoBottom()
+				m.render()
+			}
 		case "enter":
 			if len(m.Items) > 0 {
-				return nil, fmt.Errorf("list:select:%d", m.Cursor)
+				return app.Action("list", "select", m.Cursor)
 			}
+		case "esc":
+			return app.Action("list", "back")
 		}
 	}
 
 	var cmd tea.Cmd
 	m.Viewport, cmd = m.Viewport.Update(msg)
-	return cmd, nil
+	return cmd
 }
 
 func (m *Model) View() string {
@@ -156,6 +169,10 @@ func (m *Model) View() string {
 
 	out.WriteString(m.Viewport.View())
 	out.WriteString("\n")
-	out.WriteString(m.styleDim.Render(fmt.Sprintf("  %d items (page %d/%d)  ↑↓ move · enter select", len(m.Items), m.Page+1, (m.Total+m.PerPage-1)/m.PerPage)))
+	totalPages := 1
+	if m.PerPage > 0 {
+		totalPages = (m.Total + m.PerPage - 1) / m.PerPage
+	}
+	out.WriteString(m.styleDim.Render(fmt.Sprintf("  %d items (page %d/%d)  \u2191\u2193 move \u00b7 enter select", len(m.Items), m.Page+1, totalPages)))
 	return out.String()
 }

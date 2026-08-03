@@ -230,12 +230,10 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 			}
 
 			// Store the current field value.
-			if true {
-				if lState.Session == nil {
-					lState.Session = secret.NewSession()
-				}
-				lState.Session.Set(stage.Field.Name, lState.Input)
+			if lState.Session == nil {
+				lState.Session = secret.NewSession()
 			}
+			lState.Session.Set(stage.Field.Name, lState.Input)
 
 			// Submit if there's a submit function.
 			if stage.Submit != nil {
@@ -335,10 +333,7 @@ func (s *loginStep[T]) View(state *T) string {
 		// Input stage.
 		stage := s.config.Stages[lState.Stage]
 
-		masked := false
-		if true {
-			masked = stage.Field.Masked
-		}
+		masked := stage.Field.Masked
 
 		content = "  " + tui.TextInput(lState.Input, "type here...", masked) + "\n"
 		if lState.Message != "" {

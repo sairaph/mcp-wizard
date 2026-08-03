@@ -1,4 +1,4 @@
-// Package form provides a multi-field form screen.
+// Package form provides a multi-field form component.
 package form
 
 import (
@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sairaph/mcp-wizard/app"
 )
 
 // Field is one input in a form.
@@ -48,7 +49,7 @@ func New(title string, fields []Field) *Model {
 		ti.Placeholder = f.Label
 		if f.Secret {
 			ti.EchoMode = textinput.EchoPassword
-			ti.EchoCharacter = '•'
+			ti.EchoCharacter = '\u2022'
 		}
 		if f.Value != "" {
 			ti.SetValue(f.Value)
@@ -67,21 +68,28 @@ func New(title string, fields []Field) *Model {
 func (m *Model) Values() map[string]string {
 	result := make(map[string]string, len(m.Fields))
 	for i, f := range m.Fields {
-		result[f.Label] = m.Inputs[i].Value()
+		if i < len(m.Inputs) {
+			result[f.Label] = m.Inputs[i].Value()
+		}
 	}
 	return result
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
+func (m *Model) Init() tea.Cmd { return nil }
+
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	if m.Submitted {
-		return nil, nil
+		return nil
 	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "tab", "down":
-			m.Focused = (m.Focused + 1) % max(1, len(m.Inputs))
+			if len(m.Inputs) == 0 {
+				break
+			}
+			m.Focused = (m.Focused + 1) % len(m.Inputs)
 			for i := range m.Inputs {
 				if i == m.Focused {
 					m.Inputs[i].Focus()
@@ -89,7 +97,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
 					m.Inputs[i].Blur()
 				}
 			}
+			return nil
 		case "shift+tab", "up":
+			if len(m.Inputs) == 0 {
+				break
+			}
 			m.Focused = (m.Focused - 1 + len(m.Inputs)) % len(m.Inputs)
 			for i := range m.Inputs {
 				if i == m.Focused {
@@ -98,6 +110,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
 					m.Inputs[i].Blur()
 				}
 			}
+			return nil
 		case "enter":
 			// Validate all fields.
 			for i, f := range m.Fields {
@@ -112,20 +125,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
 								m.Inputs[j].Blur()
 							}
 						}
-						return nil, nil
+						return nil
 					}
 				}
 			}
 			m.Submitted = true
-			return nil, fmt.Errorf("form:submitted")
+			return app.Action("form", "submitted")
 		case "esc":
-			return nil, fmt.Errorf("form:cancelled")
+			return app.Action("form", "cancelled")
 		}
 	}
 
+	if len(m.Inputs) == 0 {
+		return nil
+	}
 	var cmd tea.Cmd
 	m.Inputs[m.Focused], cmd = m.Inputs[m.Focused].Update(msg)
-	return cmd, nil
+	return cmd
 }
 
 func (m *Model) View() string {
@@ -147,6 +163,6 @@ func (m *Model) View() string {
 	}
 
 	out.WriteString("\n")
-	out.WriteString(m.styleDim.Render("  tab next · enter submit · esc cancel"))
+	out.WriteString(m.styleDim.Render("  tab next \u00b7 enter submit \u00b7 esc cancel"))
 	return out.String()
 }

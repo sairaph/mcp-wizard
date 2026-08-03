@@ -33,9 +33,9 @@ func TestSetContent(t *testing.T) {
 
 func TestUpdateWindowSize(t *testing.T) {
 	m := detail.New("t", "content")
-	_, err := m.Update(tea.WindowSizeMsg{Width: 120, Height: 50})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := m.Update(tea.WindowSizeMsg{Width: 120, Height: 50})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd: %v", cmd)
 	}
 	if m.Width != 120 {
 		t.Errorf("expected Width 120, got %d", m.Width)
@@ -64,8 +64,8 @@ func TestViewWithoutTitle(t *testing.T) {
 func TestUpdatePassesThrough(t *testing.T) {
 	m := detail.New("t", "c")
 	// send a key msg that doesn't match any case — should still work
-	_, err := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-	if err != nil {
-		t.Fatalf("unexpected error on passthrough: %v", err)
+	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	if cmd != nil {
+		t.Fatalf("unexpected cmd on passthrough: %v", cmd)
 	}
 }

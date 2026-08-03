@@ -25,6 +25,9 @@ type Handler struct {
 	// Usage is a one-line syntax hint (e.g. "list-boards [--page N]").
 	Usage string
 
+	// RequiresDaemon is true if the command needs a running daemon.
+	RequiresDaemon bool
+
 	// Run executes the command. Return 0 for success, 1 for failure.
 	Run func(ctx context.Context, args []string) int
 }

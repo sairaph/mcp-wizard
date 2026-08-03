@@ -45,7 +45,9 @@ func Parse(s string) (Version, error) {
 
 	v := Version{Major: major, Minor: minor, Patch: patch}
 	if len(parts) > 1 && parts[1] != "" {
-		v.PreRelease = strings.Split(parts[1], ".")
+		// Strip build metadata (everything after +).
+		prerelease := strings.SplitN(parts[1], "+", 2)[0]
+		v.PreRelease = strings.Split(prerelease, ".")
 	}
 	return v, nil
 }

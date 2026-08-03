@@ -8,13 +8,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sairaph/mcp-wizard/app"
 )
 
 // Column defines a column in the table.
 type Column struct {
-	Name   string
-	Width  int
-	Align  int // -1 left, 0 center, 1 right (text/tabwriter style)
+	Name  string
+	Width int
 }
 
 // Row is one data row. Values correspond to columns by index.
@@ -66,6 +66,8 @@ func (m *Model) SetRows(rows []Row) {
 	m.render()
 }
 
+func (m *Model) Init() tea.Cmd { return nil }
+
 func (m *Model) render() {
 	var out strings.Builder
 
@@ -74,15 +76,12 @@ func (m *Model) render() {
 		name := col.Name
 		if i == m.SortBy {
 			if m.SortAsc {
-				name += " ▲"
+				name += " \u25b2"
 			} else {
-				name += " ▼"
+				name += " \u25bc"
 			}
 		}
-		cell := fmt.Sprintf("%-*s", col.Width, name)
-		if len(cell) > col.Width {
-			cell = cell[:col.Width]
-		}
+		cell := truncateCell(fmt.Sprintf("%-*s", col.Width, name), col.Width)
 		out.WriteString(m.styleHeader.Render(cell))
 	}
 	out.WriteString("\n")
@@ -96,10 +95,7 @@ func (m *Model) render() {
 		}
 		for j, col := range m.Columns {
 			if j < len(row) {
-				cell := fmt.Sprintf("%-*s", col.Width, row[j])
-				if len(cell) > col.Width {
-					cell = cell[:col.Width]
-				}
+				cell := truncateCell(fmt.Sprintf("%-*s", col.Width, row[j]), col.Width)
 				out.WriteString(cell)
 			}
 		}
@@ -109,7 +105,7 @@ func (m *Model) render() {
 	m.Viewport.SetContent(out.String())
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
@@ -130,23 +126,31 @@ func (m *Model) Update(msg tea.Msg) (tea.Cmd, error) {
 				m.Cursor++
 				m.render()
 			}
+		case "home", "g":
+			m.Cursor = 0
+			m.render()
+		case "end", "G":
+			if len(m.Rows) > 0 {
+				m.Cursor = len(m.Rows) - 1
+				m.render()
+			}
 		case "pgup":
 			m.Viewport.ViewUp()
 		case "pgdown":
 			m.Viewport.ViewDown()
 		case "enter":
 			if len(m.Rows) > 0 {
-				return nil, fmt.Errorf("table:select:%d", m.Cursor)
+				return app.Action("table", "select", m.Cursor)
 			}
-		case "s":
-			m.SortAsc = !m.SortAsc
-			m.render()
+		case "esc":
+			return app.Action("table", "back")
+
 		}
 	}
 
 	var cmd tea.Cmd
 	m.Viewport, cmd = m.Viewport.Update(msg)
-	return cmd, nil
+	return cmd
 }
 
 func (m *Model) View() string {
@@ -162,6 +166,14 @@ func (m *Model) View() string {
 
 	out.WriteString(m.Viewport.View())
 	out.WriteString("\n")
-	out.WriteString(m.styleDim.Render("  ↑↓ move · enter select · s sort · esc back"))
+	out.WriteString(m.styleDim.Render("  \u2191\u2193 move \u00b7 enter select \u00b7 esc back"))
 	return out.String()
+}
+
+func truncateCell(s string, width int) string {
+	runes := []rune(s)
+	if len(runes) <= width {
+		return s
+	}
+	return string(runes[:width])
 }
