@@ -1,14 +1,6 @@
 package mcpserver
 
-import (
-	"${ModulePath}/internal/app"
-)
-
-func ConfigFromEnv(version string) Config {
-	return Config{
-		Version: version,
-		App: app.Config{
-			Version: version,
-		},
-	}
+// Config holds the MCP server configuration.
+type Config struct {
+	Version string
 }

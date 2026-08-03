@@ -2,56 +2,226 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/sairaph/mcp"
-	"github.com/sairaph/mcp/handlers"
-	"github.com/sairaph/mcp/transports"
+	"github.com/sairaph/mcp-wizard/app"
+	"github.com/sairaph/mcp-wizard/app/menu"
+	"github.com/sairaph/mcp-wizard/cli"
+	"github.com/sairaph/mcp-wizard/command"
+	"github.com/sairaph/mcp-wizard/flow"
+	"github.com/sairaph/mcp-wizard/harness"
+	"github.com/sairaph/mcp-wizard/installer"
+	"github.com/sairaph/mcp-wizard/secret"
+	"github.com/sairaph/mcp-wizard/tui"
+
+	"${ModulePath}/internal/domain"
+	"${ModulePath}/internal/mcpserver"
 )
+
+var version = "dev"
+
+var oneShotCommands = command.NewRegistry()
+
+func init() {
+	// Example: oneShotCommands.Register(command.Handler{
+	//     Name: "list-items",
+	//     Description: "List all items",
+	//     Run: func(ctx context.Context, args []string) int {
+	//         return 0
+	//     },
+	// })
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg := Config{
-		Transport: "stdio",
+	command, err := cli.Parse(os.Args[1:])
+	if err != nil {
+		os.Exit(2)
 	}
 
-	if v := os.Getenv("TRANSPORT"); v != "" {
-		cfg.Transport = v
+	switch command.Name {
+	case "mcp", "server", "serve":
+		runMCPServer(ctx)
+	case "install", "configure":
+		os.Exit(runInstall(ctx, command))
+	case "uninstall":
+		os.Exit(runUninstall(ctx, command))
+	case "login":
+		os.Exit(runLogin(ctx, command))
+	case "doctor":
+		os.Exit(runDoctor(ctx))
+	case "update":
+		os.Exit(runUpdate(ctx, command))
+	case "help":
+		cli.Usage(os.Stdout, []cli.Spec{
+			{Name: "mcp", Description: "Run the MCP server (default)"},
+			{Name: "install", Description: "Install and configure AI client integration"},
+			{Name: "uninstall", Description: "Remove AI client integration"},
+			{Name: "login", Description: "Sign in to ${ServerName}"},
+			{Name: "doctor", Description: "Diagnose installation"},
+			{Name: "update", Description: "Update to the latest version"},
+		})
+	case "version":
+		fmt.Println(version)
+	default:
+		// One-shot commands registered via command.Registry.
+		if ok, code := oneShotCommands.Dispatch(ctx, command.Name, command.Args); ok {
+			os.Exit(code)
+		}
+		// Bare invocation: app or MCP server.
+		if tui.IsInteractive() {
+			os.Exit(runApp(ctx))
+		}
+		runMCPServer(ctx)
+	}
+}
+
+// --- App state shared across install wizard steps ---
+
+type AppState struct {
+	flow.BaseState
+	Harness installer.HarnessState
+	Login   installer.LoginState
+}
+
+// --- Install ---
+
+func runInstall(ctx context.Context, command cli.Command) int {
+	exec, err := harness.ResolveExecutable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 
-	srv := mcp.NewServer(mcp.ServerInfo{
+	detector, err := harness.New(harness.ServerSpec{
 		Name:    "${ServerName}",
+		Command: exec,
+		Args:    []string{"mcp"},
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	credStore := secret.NewFileStore(domain.CredentialPath())
+	state := &AppState{}
+
+	steps := []flow.Step[AppState]{
+		installer.HarnessStep(ctx, detector,
+			func(s *AppState) *installer.HarnessState { return &s.Harness },
+			installer.HarnessStepOptions{AllDetected: true},
+		),
+		installer.LoginStep(ctx, domain.LoginConfig(credStore),
+			func(s *AppState) *installer.LoginState { return &s.Login },
+		),
+	}
+
+	if tui.IsInteractive() {
+		return tui.Run(ctx, flow.New(steps, state), tui.Options{Title: "${ServerName} setup"})
+	}
+
+	return runUnattended(ctx, detector, credStore, command)
+}
+
+func runUnattended(ctx context.Context, detector *harness.Detector, credStore secret.Store, command cli.Command) int {
+	// Detect harnesses and register with selected clients.
+	harnesses := detector.Detect(ctx)
+	var ids []harness.ID
+	for _, h := range harnesses {
+		if command.All || (h.Selectable() && !h.Configured) {
+			ids = append(ids, h.ID)
+		}
+	}
+	if len(ids) == 0 {
+		installer.PrintNoClients(os.Stdout, "${ServerName}", false)
+		return 0
+	}
+	results := detector.Apply(ctx, ids, harness.Present, harness.ConflictReplace)
+	installer.PrintResults(os.Stdout, results, true, command.DryRun)
+	return 0
+}
+
+// --- Uninstall ---
+
+func runUninstall(ctx context.Context, command cli.Command) int {
+	exec, _ := harness.ResolveExecutable()
+	detector, _ := harness.New(harness.ServerSpec{Name: "${ServerName}", Command: exec, Args: []string{"mcp"}})
+	harnesses := detector.Detect(ctx)
+	var ids []harness.ID
+	for _, h := range harnesses {
+		if h.Configured {
+			ids = append(ids, h.ID)
+		}
+	}
+	if len(ids) == 0 {
+		fmt.Println("  No clients are configured.")
+		return 0
+	}
+	results := detector.Apply(ctx, ids, harness.Absent, harness.ConflictError)
+	installer.PrintResults(os.Stdout, results, false, command.DryRun)
+	return 0
+}
+
+// --- Login ---
+
+func runLogin(ctx context.Context, command cli.Command) int {
+	credStore := secret.NewFileStore(domain.CredentialPath())
+	state := &AppState{}
+	step := installer.LoginStep(ctx, domain.LoginConfig(credStore),
+		func(s *AppState) *installer.LoginState { return &s.Login },
+	)
+
+	f := flow.New([]flow.Step[AppState]{step}, state)
+	return tui.Run(ctx, f, tui.Options{Title: "${ServerName} login"})
+}
+
+// --- Doctor ---
+
+func runDoctor(ctx context.Context) int {
+	// Uses doctor package for health checks.
+	return 0
+}
+
+// --- Update ---
+
+func runUpdate(ctx context.Context, command cli.Command) int {
+	// Uses update package for self-update.
+	return 0
+}
+
+// --- App ---
+
+func runApp(ctx context.Context) int {
+	screens := []app.Screen{
+		menu.New("${ServerName}", buildMenu),
+	}
+	return app.Run(ctx, screens, app.Options{
+		Title:   "${ServerName}",
 		Version: version,
 	})
+}
 
-	handlers.RegisterAll(srv, cfg)
-
-	var transport transports.Transport
-	switch cfg.Transport {
-	case "stdio":
-		transport = transports.NewStdio()
-	case "sse":
-		addr := os.Getenv("ADDR")
-		if addr == "" {
-			addr = ":8080"
-		}
-		transport = transports.NewSSE(addr)
-	default:
-		log.Fatalf("unknown transport: %s", cfg.Transport)
+func buildMenu() []menu.Item {
+	return []menu.Item{
+		{Label: "Browse", Action: "browse"},
+		{Label: "Search", Action: "search"},
+		{Label: "Settings", Action: "settings"},
+		{Label: "Configure AI clients", Action: "configure"},
+		{Label: "Quit", Action: "quit"},
 	}
+}
 
-	go func() {
-		<-ctx.Done()
-		srv.Close()
-	}()
+// --- MCP Server ---
 
-	log.Printf("${ServerName} starting on %s", cfg.Transport)
-	if err := srv.Serve(ctx, transport); err != nil {
-		log.Fatal(err)
+func runMCPServer(ctx context.Context) {
+	srv := mcpserver.New(version)
+	if err := srv.Run(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }

@@ -1,5 +1,42 @@
+// Package domain holds the business logic for ${ServerName}.
+// This is where you implement your API client, data types, and auth.
 package domain
 
-type Greeting struct {
-	Message string
+import (
+	"context"
+	"os"
+	"path/filepath"
+
+	"github.com/sairaph/mcp-wizard/installer"
+	"github.com/sairaph/mcp-wizard/secret"
+)
+
+// CredentialPath returns the path where credentials are stored.
+func CredentialPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".${BinaryName}", "credentials.json")
+}
+
+// LoginConfig returns the credential collection configuration.
+// Replace this with your actual auth flow (email+token, OAuth, API key, etc.).
+func LoginConfig(store secret.Store) installer.LoginConfig {
+	return installer.LoginConfig{
+		ID:        "${ServerName}-login",
+		Label:     "${ServerName} account",
+		Skippable: true,
+		Stages: []installer.LoginStage{
+			{
+				Prompt: "your email address",
+				Fields: []installer.LoginField{
+					{Name: "email", Label: "Email"},
+				},
+			},
+		},
+		Store: store,
+	}
+}
+
+// DefaultEnv returns default environment variables for client configs.
+func DefaultEnv() map[string]string {
+	return nil
 }

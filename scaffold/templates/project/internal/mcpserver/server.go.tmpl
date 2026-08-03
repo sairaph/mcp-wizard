@@ -1,37 +1,50 @@
+// Package mcpserver provides the MCP server setup and tool registration.
 package mcpserver
 
 import (
-	"github.com/sairaph/mcp"
-	"github.com/sairaph/mcp/handlers"
-	"${ModulePath}/internal/app"
+	"context"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func New(cfg Config) *mcp.Server {
-	srv := mcp.NewServer(mcp.ServerInfo{
-		Name:    "${ServerName}",
-		Version: cfg.Version,
-	})
+// Server wraps the MCP server and domain logic.
+type Server struct {
+	mcpServer *mcp.Server
+}
 
-	appSvc := app.New(cfg.App)
+// New creates a new MCP server with the given version.
+func New(version string) *Server {
+	srv := &Server{
+		mcpServer: mcp.NewServer(mcp.ServerInfo{
+			Name:    "${ServerName}",
+			Version: version,
+		}),
+	}
 
-	registerTools(srv, appSvc)
-	registerResources(srv, appSvc)
-	registerPrompts(srv, appSvc)
+	// Register your tools here.
+	// Example:
+	// registerGreet(srv.mcpServer, srv)
 
 	return srv
 }
 
-type Config struct {
-	Version string
-	App     app.Config
+// Run starts the server and blocks until it exits.
+func (s *Server) Run(ctx context.Context) error {
+	// By default, run as stdio server.
+	// Replace with SSE or other transport as needed.
+	return s.mcpServer.ServeStdio(ctx)
 }
 
-func registerTools(srv *mcp.Server, svc *app.Service) {
-	handlers.RegisterTool(srv, "greet", svc.Greet)
-}
-
-func registerResources(srv *mcp.Server, svc *app.Service) {
-}
-
-func registerPrompts(srv *mcp.Server, svc *app.Service) {
-}
+// Register a tool:
+//
+// func registerGreet(srv *mcp.Server, s *Server) {
+//     mcp.AddTool(srv, &mcp.Tool{
+//         Name:        "greet",
+//         Description: "Say hello to someone.",
+//         InputSchema: ...,
+//     }, s.handleGreet)
+// }
+//
+// func (s *Server) handleGreet(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+//     return mcp.NewToolResultText("Hello, world!"), nil
+// }
