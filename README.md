@@ -4,7 +4,10 @@ Build, install, and distribute MCP servers with zero boilerplate.
 
 Write your domain logic and MCP tools. The library gives you everything else:
 harness detection, install wizard TUI, credential UX, output rendering, CLI
-parsing, self-update, doctor checks, and project scaffolding.
+parsing, self-update, doctor checks, project scaffolding, and a full TUI app
+framework for user-facing applications.
+
+---
 
 ## Quick Start
 
@@ -20,19 +23,26 @@ cd ./my-server
 # Then build and ship
 ```
 
+---
+
 ## What You Get
 
-The scaffold generates a complete project:
+The scaffold generates a complete project with:
 
 | What | How |
 |---|---|
 | Install scripts | `install.sh` + `install.ps1` with SHA256 verification |
 | CI/CD | GitHub workflows for test, build, release (6 targets) |
-| MCP server skeleton | `internal/mcpserver/` with tool registration pattern |
+| MCP server skeleton | `internal/mcpserver/` with tool registration |
 | TUI install wizard | Harness detection, credential login, settings |
+| TUI user app | Full-screen app with menu, lists, forms, search |
+| One-shot CLI commands | Standalone commands sharing logic with the app |
 | Self-update | `<bin> update` with semver check + atomic swap |
 | Doctor | `<bin> doctor` for diagnostics |
+| Daemon lifecycle | Lock-based or socket-based background process |
 | AGENTS.md + docs | Tool contract and agent guidelines |
+
+---
 
 ## How It Works
 
@@ -55,14 +65,50 @@ User runs: curl ... | sh
    [9] Write client configs
               |
               v
-         MCP Server
-  [10] Serve tools over stdio
-  [11] Handle tool calls with your domain logic
+         Binary dispatch (main.go)
+  [10] Bare invocation (TTY) → TUI app
+  [11] Bare invocation (pipe) → MCP server
+  [12] Subcommand "install" → install wizard
+  [13] Subcommand "list-items" → one-shot CLI command
+  [14] Subcommand "daemon" → background daemon
 ```
+
+---
+
+## Library Packages
+
+| Package | Description |
+|---|---|
+| `cli` | Subcommand parser with credential flags |
+| `budget` | Real BPE token counting, FitLines, Truncate, Paginate |
+| `render` | YAML frontmatter + Markdown output, error classification |
+| `flow` | Step abstraction + Flow runner for install wizards |
+| `tui` | Reusable Bubble Tea components (CheckboxList, RadioList, TextInput, ...) |
+| `harness` | detect-harness wrapper (library-owned types, no leak) |
+| `installer` | HarnessStep, LoginStep (multi-stage), unattended helpers |
+| `secret` | Credential store (FileStore 0600 atomic, EnvStore), Session |
+| `update` | Self-update, semver, SHA256 verification, atomic swap |
+| `doctor` | Health checks (executable, PATH, config, update) |
+| `app` | TUI app framework (step-based, single AppModel) |
+| `app/menu` | Dynamic menu component |
+| `app/list` | Scrollable list with pagination |
+| `app/detail` | Scrollable content viewer |
+| `app/form` | Multi-field form with validation |
+| `app/search` | Search input + results |
+| `app/table` | Tabular data display |
+| `app/confirm` | Confirmation dialog |
+| `app/paginator` | Paginated list with next/prev |
+| `command` | One-shot CLI command registry |
+| `async` | Generic async loading helpers (Result[T], Load[T]) |
+| `daemon/lock` | File-lock-based daemon lifecycle |
+| `daemon/socket` | Unix-socket daemon with JSON-RPC IPC |
+| `daemon/rpc` | JSON-RPC protocol types |
+
+---
 
 ## Your Code
 
-Your MCP server has three parts:
+Your MCP server has four parts:
 
 ### 1. Domain logic (`internal/domain/`)
 
@@ -79,64 +125,68 @@ func (c *Client) GetBoards(ctx context.Context) ([]Board, error) { ... }
 ### 2. MCP tools (`internal/mcpserver/`)
 
 ```go
-func registerBoards(srv *mcp.Server, s *Server) {
-    addTool(s, srv, TierRead, &mcp.Tool{
-        Name:        "list_boards",
-        Description: "List all boards...",
-        InputSchema: objectSchema(),
-    }, s.listBoards)
-}
+mcp.AddTool(srv, &mcp.Tool{
+    Name:        "list_boards",
+    Description: "List all boards...",
+    InputSchema: ...,
+}, s.handleListBoards)
 
-func (s *Server) listBoards(ctx context.Context, req *mcp.CallToolRequest, args listBoardsArgs) (*mcp.CallToolResult, any, error) {
+func (s *Server) handleListBoards(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
     boards, err := s.client.GetBoards(ctx)
     if err != nil {
-        return render.ErrorResult(render.Classify(err, errorTable)), nil, nil
+        return render.ErrorResult(render.Classify(err, errorTable)), nil
     }
-    return render.SuccessResult(front, body), nil, nil
+    return render.SuccessResult(front, body), nil
 }
 ```
 
-### 3. Main dispatch and install wizard
+### 3. App screens (`internal/app/`)
 
 ```go
-func runInstall(ctx context.Context, command cli.Command) int {
-    exec, _ := harness.ResolveExecutable()
-    detector, _ := harness.New(harness.ServerSpec{Name: "my-server", Command: exec, Args: []string{"mcp"}})
-    credStore := secret.FileStore(domain.CredentialPath)
+type screen int
+const (
+    screenMenu  screen = iota
+    screenList
+)
 
-    state := &AppState{}
-    steps := []flow.Step[AppState]{
-        installer.HarnessStep(ctx, detector, func(s *AppState) *installer.HarnessState { return &s.Harness }, installer.HarnessStepOptions{AllDetected: true}),
-        installer.LoginStep(ctx, domain.LoginConfig(credStore), func(s *AppState) *installer.LoginState { return &s.Login }),
-    }
+type State struct {
+    app.AppModel
+    items []Item
+}
 
-    if tui.IsInteractive() {
-        return tui.Run(ctx, flow.New(steps, state), tui.Options{Title: "my-server setup"})
+func (m *State) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    if m.HandleGlobalKeys(msg) {
+        return m, nil
     }
-    return runUnattended(ctx, detector, credStore, command)
+    switch m.Step {
+    case screenMenu:
+        cmd := m.Menu.Update(msg)
+        // handle menu actions via ActionMsg
+    }
+    return m, nil
 }
 ```
 
-## Packages
+### 4. Main dispatch (`main.go`)
 
-| Package | Description |
-|---|---|
-| `cli` | Subcommand parser with credential flags |
-| `budget` | Real BPE token counting, FitLines, Truncate, Paginate |
-| `render` | YAML frontmatter + Markdown output, error classification |
-| `flow` | Step abstraction + Flow runner for TUI wizards |
-| `tui` | Bubble Tea components, layout, theme, spinner, key hints |
-| `harness` | detect-harness wrapper (library-owned types, no leak) |
-| `installer` | HarnessStep, LoginStep (multi-stage), unattended helpers |
-| `secret` | Credential store (FileStore 0600 atomic, EnvStore), Session |
-| `update` | Self-update, semver, SHA256 verification, atomic swap |
-| `doctor` | Health checks (executable, PATH, config, update) |
+```go
+func main() {
+    cmd, err := cli.Parse(os.Args[1:])
+    switch cmd.Name {
+    case "mcp":      runMCPServer(ctx)
+    case "install":  runInstall(ctx, cmd)
+    case "list-items": oneShotCommands.Dispatch(ctx, cmd.Name, cmd.Args)
+    default:
+        if tui.IsInteractive() {
+            os.Exit(app.Run(ctx, &State{...}, app.Options{Title: "my-server"}))
+        }
+        runMCPServer(ctx)
+    }
+}
+```
+
+---
 
 ## Design
 
-See [DESIGN.md](DESIGN.md) for the full architecture and [TOOLS.md](TOOLS.md)
-for agentic tool design conventions.
-
-## License
-
-MIT
+See [DESIGN.md](DESIGN.md) for the full architecture.

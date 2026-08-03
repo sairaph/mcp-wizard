@@ -23,15 +23,20 @@ library/
   update/     Self-update, semver, SHA256 verification, atomic swap
   doctor/     Health checks (executable, PATH, config, update)
 
-  app/        TUI app framework (see below)
+  app/        TUI app framework (step-based AppModel, ActionMsg dispatch)
   app/menu/   Dynamic menu component
   app/list/   Scrollable list with pagination
-  app/detail/ Scrollable detail/view screen
+  app/detail/ Scrollable content viewer
   app/form/   Multi-field form with validation
   app/search/ Search input + results
   app/table/  Tabular data display
-  daemon/     Daemon lifecycle (start, stop, autostart, IPC)
+  app/confirm/ Confirmation dialog
+  app/paginator/ Paginated list with next/prev navigation
   command/    One-shot CLI command registry
+  async/      Generic async loading helpers (Result[T], Load[T], Start[T])
+  daemon/lock/   File-lock-based daemon lifecycle
+  daemon/socket/ Unix-socket daemon with JSON-RPC IPC
+  daemon/rpc/    JSON-RPC protocol types (Request, Response, Error)
 
 scaffold/     mcp-wizard new project generator with go:embed templates
 templates/    Install scripts, CI/CD workflows, project skeleton
