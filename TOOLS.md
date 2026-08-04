@@ -93,7 +93,7 @@ error:
 - Classify domain errors into typed codes
 - Validation errors normalised from SDK framing into clean prose
 - Unknown arguments rejected at schema level
-- Forward-facing only — no changelog phrasing
+- Forward-facing only - no changelog phrasing
 
 ---
 

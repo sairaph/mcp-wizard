@@ -25,7 +25,7 @@ irm https://github.com/sairaph/mcp-wizard/releases/latest/download/install.ps1 |
 
 The installer downloads the scaffold binary, then run `mcp-wizard new` to
 generate a new MCP server project with install scripts, CI/CD, and a complete
-TUI application — all wired together and ready to build.
+TUI application - all wired together and ready to build.
 
 Linux x64/ARM64, macOS x64/Apple Silicon, and Windows x64/ARM64 are published.
 
@@ -37,35 +37,35 @@ rendering, CLI dispatch, self-update, diagnostics, and often a TUI app for
 users. mcp-wizard provides all of it as a Go library, plus a scaffold that
 generates a complete project so you only write your domain logic and MCP tools.
 
-- **detect-harness** powers client detection — finds Claude Desktop, Claude Code,
+- **detect-harness** powers client detection - finds Claude Desktop, Claude Code,
   Cursor, VS Code, Windsurf, Zed, Cline, Roo Code, and 6 more on your machine.
 - **The install wizard** walks users through selecting clients, signing in, and
-  configuring settings — in a terminal UI that matches the install script's look.
+  configuring settings - in a terminal UI that matches the install script's look.
 - **The app framework** gives you reusable components (menu, list, form, search,
   table, confirm, paginator) for building your own user-facing TUI application.
-- **Everything is optional** — use just the packages you need.
+- **Everything is optional** - use just the packages you need.
 
 ## Features
 
-- **Project scaffold** — `mcp-wizard new` generates a complete project with
+- **Project scaffold** - `mcp-wizard new` generates a complete project with
   `install.sh`/`install.ps1`, GitHub CI/CD workflows, and a wired `main.go`.
-- **24 library packages** — CLI parsing, token-budget pagination, output
+- **24 library packages** - CLI parsing, token-budget pagination, output
   rendering, install wizard steps, credential management, self-update, health
   checks, TUI components, daemon lifecycle, one-shot command registry, and more.
-- **AI client detection** — registers your server with 13+ AI clients via the
+- **AI client detection** - registers your server with 13+ AI clients via the
   same `detect-harness` library used by all three reference MCP servers.
-- **TUI install wizard** — harness selection, credential login (multi-stage),
+- **TUI install wizard** - harness selection, credential login (multi-stage),
   settings configuration, unattended mode.
-- **TUI app framework** — screen components (menu, list, detail, form, search,
+- **TUI app framework** - screen components (menu, list, detail, form, search,
   table, confirm, paginator) with `ActionMsg` dispatch and step-based navigation.
-- **Daemon lifecycle** — lock-based (file lock + periodic work) or socket-based
+- **Daemon lifecycle** - lock-based (file lock + periodic work) or socket-based
   (Unix socket + JSON-RPC IPC), with autostart and graceful shutdown.
-- **One-shot CLI commands** — register standalone commands that share business
+- **One-shot CLI commands** - register standalone commands that share business
   logic with the TUI app.
-- **Self-update** — semver version comparison, GitHub release checking, SHA256
+- **Self-update** - semver version comparison, GitHub release checking, SHA256
   verification, atomic binary swap with cross-device copy fallback.
-- **Doctor** — health checks for executable, PATH, config, and update status.
-- **Install scripts** — `install.sh` and `install.ps1` with OS/arch detection,
+- **Doctor** - health checks for executable, PATH, config, and update status.
+- **Install scripts** - `install.sh` and `install.ps1` with OS/arch detection,
   SHA256 verification, PATH setup, and interactive configure launch.
 
 ## Quick Start

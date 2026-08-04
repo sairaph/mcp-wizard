@@ -207,16 +207,16 @@ func SwapFrom(ctx context.Context, tempPath string, opts Options) error {
 func verifyChecksum(ctx context.Context, checksumURL, assetName, downloadedHash string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumURL, nil)
 	if err != nil {
-		return nil // checksum unavailable — non-fatal
+		return nil // checksum unavailable - non-fatal
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil // checksum unavailable — non-fatal
+		return nil // checksum unavailable - non-fatal
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil // checksum unavailable — non-fatal
+		return nil // checksum unavailable - non-fatal
 	}
 
 	data, err := io.ReadAll(resp.Body)
@@ -242,7 +242,7 @@ func verifyChecksum(ctx context.Context, checksumURL, assetName, downloadedHash 
 			return nil
 		}
 	}
-	return nil // asset not found in checksum file — non-fatal
+	return nil // asset not found in checksum file - non-fatal
 }
 
 func swapFile(source, target string) error {

@@ -34,7 +34,7 @@ func (s *transportStep[T]) Title(state *T) string {
 	if s.stateFn == nil {
 		return "Server transport"
 	}
-	return "Server transport — how should AI clients connect?"
+	return "Server transport - how should AI clients connect?"
 }
 
 func (s *transportStep[T]) Hints(state *T) []struct{ Key, Label string } {
@@ -143,7 +143,7 @@ func (s *transportStep[T]) View(state *T) string {
 	}
 
 	if ts.Stage == 0 {
-		options := []string{"stdio (local) — AI client spawns the server", "HTTP (network) — server listens on a TCP port"}
+		options := []string{"stdio (local) - AI client spawns the server", "HTTP (network) - server listens on a TCP port"}
 		var out strings.Builder
 		out.WriteString(tui.Section(tui.DefaultTheme, s.Title(state), ""))
 		for i, opt := range options {
@@ -162,7 +162,7 @@ func (s *transportStep[T]) View(state *T) string {
 	}
 
 	var out strings.Builder
-	out.WriteString(tui.Section(tui.DefaultTheme, "HTTP address — what port should the server listen on?", ""))
+	out.WriteString(tui.Section(tui.DefaultTheme, "HTTP address - what port should the server listen on?", ""))
 	fmt.Fprintf(&out, "  %s_\n", ts.Input)
 	out.WriteString("\n" + tui.Footer(tui.DefaultTheme, "enter confirm · esc back"))
 	return out.String()

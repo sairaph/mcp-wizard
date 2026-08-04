@@ -9,7 +9,7 @@ type BaseState struct {
 	Message  string // transient, current-screen (recoverable error)
 	Failure  error  // terminal error (causes Fail)
 	Warning  string // non-fatal, surfaced in summary
-	Settled  bool   // point of no return — cancel is normal exit, not failure
+	Settled  bool   // point of no return - cancel is normal exit, not failure
 	NextStep string // target step ID when Directive is Jump
 }
 

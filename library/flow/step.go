@@ -1,6 +1,6 @@
 // Package flow provides the Step abstraction and Flow runner for
 // multi-screen wizards. Steps are handlers over shared state, not
-// swappable models — the Flow owns the single tea.Model.
+// swappable models - the Flow owns the single tea.Model.
 package flow
 
 import tea "github.com/charmbracelet/bubbletea"
@@ -18,7 +18,7 @@ const (
 	Fail                      // fatal; state.Failure carries the error
 )
 
-// Step is one screen in a wizard. View returns content only —
+// Step is one screen in a wizard. View returns content only -
 // the framework wraps it in chrome (header, section title, footer).
 type Step[T any] interface {
 	// ID returns a stable identifier for this step.

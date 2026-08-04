@@ -63,7 +63,7 @@ func TestViewWithoutTitle(t *testing.T) {
 
 func TestUpdatePassesThrough(t *testing.T) {
 	m := detail.New("t", "c")
-	// send a key msg that doesn't match any case — should still work
+	// send a key msg that doesn't match any case - should still work
 	cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
 	if cmd != nil {
 		t.Fatalf("unexpected cmd on passthrough: %v", cmd)

@@ -11,7 +11,7 @@ import (
 const MaxBytes = 1 << 20 // 1 MiB hard ceiling
 
 // Document is a YAML frontmatter + Markdown body output.
-// Front must be a struct or a concrete typed value — map[string]any
+// Front must be a struct or a concrete typed value - map[string]any
 // produces non-deterministic key order in YAML and is rejected at runtime.
 type Document struct {
 	Front   any

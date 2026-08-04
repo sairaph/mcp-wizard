@@ -18,7 +18,7 @@ func Run[T any](ctx context.Context, f *flow.Flow[T], opts Options) int {
 		return 1
 	}
 	theme := opts.Theme
-	// Only default when no theme fields are set — partial overrides are respected.
+	// Only default when no theme fields are set - partial overrides are respected.
 	if theme == (Theme{}) {
 		theme = DefaultTheme
 	}

@@ -79,7 +79,7 @@ func (v Version) Compare(other Version) int {
 	if v.Patch != other.Patch {
 		return cmp(v.Patch, other.Patch)
 	}
-	// Same release version — compare pre-release.
+	// Same release version - compare pre-release.
 	if len(v.PreRelease) == 0 && len(other.PreRelease) > 0 {
 		return 1 // release > pre-release
 	}

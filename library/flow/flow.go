@@ -68,8 +68,8 @@ func (f *Flow[T]) Model() tea.Model {
 
 // ExitCode returns the exit code after the program finishes:
 //
-//	0 — normal completion or Quit before Settled
-//	1 — Fail (state.Failure is non-nil)
+//	0 - normal completion or Quit before Settled
+//	1 - Fail (state.Failure is non-nil)
 //
 // The state type T must embed *BaseState for Failure detection;
 // otherwise, ExitCode always returns 0.
@@ -116,6 +116,7 @@ func (m *flowModel[T]) Init() tea.Cmd {
 	}
 	v := reflect.ValueOf(m.step)
 	if v.Kind() == reflect.Ptr && v.IsNil() {
+		m.step = nil
 		return tea.Quit
 	}
 	return m.step.Init(m.flow.state)
@@ -159,6 +160,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		v := reflect.ValueOf(m.step)
 		if v.Kind() == reflect.Ptr && v.IsNil() {
+			m.step = nil
 			return m, tea.Quit
 		}
 		initCmd := m.step.Init(m.flow.state)
@@ -175,6 +177,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		v := reflect.ValueOf(m.step)
 		if v.Kind() == reflect.Ptr && v.IsNil() {
+			m.step = nil
 			return m, tea.Quit
 		}
 		initCmd := m.step.Init(m.flow.state)
@@ -193,6 +196,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		v := reflect.ValueOf(m.step)
 		if v.Kind() == reflect.Ptr && v.IsNil() {
+			m.step = nil
 			return m, tea.Quit
 		}
 		initCmd := m.step.Init(m.flow.state)
@@ -227,6 +231,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		v := reflect.ValueOf(m.step)
 		if v.Kind() == reflect.Ptr && v.IsNil() {
+			m.step = nil
 			return m, tea.Quit
 		}
 		initCmd := m.step.Init(m.flow.state)

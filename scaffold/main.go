@@ -50,17 +50,17 @@ func main() {
 		os.Exit(2)
 	}
 
-	// Flags provided — run CLI mode.
+	// Flags provided - run CLI mode.
 	if *name != "" && *owner != "" {
 		runCLI(*name, *owner, *dir)
 		return
 	}
 
-	// No flags — show usage or open TUI.
+	// No flags - show usage or open TUI.
 	if tui.IsInteractive() {
 		os.Exit(runTUI())
 	}
-	fmt.Fprintf(os.Stderr, "Usage: mcp-wizard new --name <name> --owner <owner> [--dir <dir>]\n")
+	fmt.Fprintf(os.Stderr, "Usage: mcp-wizard --name <name> --owner <owner> [--dir <dir>]\n")
 	os.Exit(2)
 }
 
@@ -251,7 +251,7 @@ func (s *tuiState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (s *tuiState) View() string {
 	if s.Step == 99 {
-		return "mcp-wizard new --name <name> --owner <owner> [--dir <dir>]\n\nPress any key to return."
+		return "mcp-wizard --name <name> --owner <owner> [--dir <dir>]\n\nPress any key to return."
 	}
 	if s.Step == 0 && s.menu != nil {
 		return s.menu.View()

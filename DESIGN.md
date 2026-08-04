@@ -165,7 +165,7 @@ type Handler struct {
 ```
 
 Business logic lives in package-level functions that both the TUI screens and
-the command handlers call — the canonical pattern from all three reference
+the command handlers call - the canonical pattern from all three reference
 projects.
 
 ---

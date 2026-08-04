@@ -93,9 +93,9 @@ func IsRunning(lockFile string) bool {
 	}
 	if locked {
 		lock.Unlock()
-		return false // lock was free — daemon is not running
+		return false // lock was free - daemon is not running
 	}
-	return true // lock is held — daemon is running
+	return true // lock is held - daemon is running
 }
 
 // Stop stops a running daemon by sending a signal to the PID in the PID file.
