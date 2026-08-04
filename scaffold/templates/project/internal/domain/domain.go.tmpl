@@ -29,8 +29,8 @@ func LoginConfig(store secret.Store) installer.LoginConfig {
 		Stages: []installer.LoginStage{
 			{
 				Prompt: "your email address",
-				Fields: []installer.LoginField{
-					{Name: "email", Label: "Email"},
+				Field: installer.LoginField{
+					Name: "email", Label: "Email",
 				},
 			},
 		},

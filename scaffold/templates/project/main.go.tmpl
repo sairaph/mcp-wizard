@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sairaph/mcp-wizard/app"
 	"github.com/sairaph/mcp-wizard/app/menu"
 	"github.com/sairaph/mcp-wizard/cli"
@@ -23,7 +24,7 @@ import (
 
 var version = "dev"
 
-var oneShotCommands = command.NewRegistry()
+var oneShotCommands = command.New()
 
 func init() {
 	// Example: oneShotCommands.Register(command.Handler{
@@ -205,14 +206,29 @@ func runUpdate(ctx context.Context, cmd cli.Command) int {
 
 // --- App ---
 
+type appState struct {
+	app.AppModel
+}
+
 func runApp(ctx context.Context) int {
-	screens := []app.Screen{
-		menu.New("${ServerName}", buildMenu),
-	}
-	return app.Run(ctx, screens, app.Options{
+	return app.Run(ctx, &appState{}, app.Options{
 		Title:   "${ServerName}",
 		Version: version,
 	})
+}
+
+func (m *appState) Init() tea.Cmd { return nil }
+
+func (m *appState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.HandleGlobalKeys(msg) {
+		return m, nil
+	}
+	// Handle domain-specific messages here.
+	return m, nil
+}
+
+func (m *appState) View() string {
+	return ""
 }
 
 func buildMenu() []menu.Item {

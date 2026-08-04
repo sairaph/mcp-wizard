@@ -11,13 +11,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Config holds the MCP server configuration.
-type Config struct {
-	Version   string
-	Transport string // "stdio" or "http"
-	HTTPAddr  string // listen address for HTTP mode (default "127.0.0.1:8080")
-}
-
 // Server wraps the MCP server and domain logic.
 type Server struct {
 	mcpServer *mcp.Server

@@ -135,12 +135,13 @@ func runCLI(name, owner, dir string) {
 
 type tuiState struct {
 	app.AppModel
-	name  string
-	owner string
-	dir   string
-	menu  *menu.Model
-	form  *form.Model
-	done  bool
+	name         string
+	owner        string
+	dir          string
+	menu         *menu.Model
+	form         *form.Model
+	done         bool
+	runAfterQuit func()
 }
 
 func runTUI() int {
@@ -152,7 +153,11 @@ func runTUI() int {
 			{Label: "Quit", Action: "quit"},
 		}
 	})
-	return app.Run(context.Background(), s, app.Options{Title: "mcp-wizard"})
+	exitCode := app.Run(context.Background(), s, app.Options{Title: "mcp-wizard"})
+	if s.runAfterQuit != nil {
+		s.runAfterQuit()
+	}
+	return exitCode
 }
 
 func (s *tuiState) Init() tea.Cmd {
@@ -168,32 +173,35 @@ func (s *tuiState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case app.ActionMsg:
 		switch msg.Source {
 		case "menu":
-			switch msg.Value {
-			case "new":
-				s.Step = 1
-				s.form = form.New("New Project", []form.Field{
-					{Label: "Project name", Validate: func(v string) error {
-						if !validName.MatchString(v) {
-							return fmt.Errorf("must be a valid Go identifier (letters, digits, underscores)")
-						}
-						if goKeywords[v] {
-							return fmt.Errorf("%q is a Go keyword", v)
-						}
-						return nil
-					}},
-					{Label: "GitHub owner", Validate: func(v string) error {
-						if !validOwner.MatchString(v) {
-							return fmt.Errorf("must match GitHub username or org pattern")
-						}
-						return nil
-					}},
-				})
-				return s, s.form.Init()
-			case "help":
-				s.Status = "mcp-wizard new --name <name> --owner <owner> [--dir <dir>]"
-			case "quit":
-				s.Quit = true
-				return s, tea.Quit
+			if msg.Value == "select" {
+				action, _ := msg.Data.(string)
+				switch action {
+				case "new":
+					s.Step = 1
+					s.form = form.New("New Project", []form.Field{
+						{Label: "Project name", Validate: func(v string) error {
+							if !validName.MatchString(v) {
+								return fmt.Errorf("must be a valid Go identifier (letters, digits, underscores)")
+							}
+							if goKeywords[v] {
+								return fmt.Errorf("%q is a Go keyword", v)
+							}
+							return nil
+						}},
+						{Label: "GitHub owner", Validate: func(v string) error {
+							if !validOwner.MatchString(v) {
+								return fmt.Errorf("must match GitHub username or org pattern")
+							}
+							return nil
+						}},
+					})
+					return s, s.form.Init()
+				case "help":
+					s.Status = "mcp-wizard new --name <name> --owner <owner> [--dir <dir>]"
+				case "quit":
+					s.Quit = true
+					return s, tea.Quit
+				}
 			}
 		case "form":
 			switch msg.Value {
@@ -201,8 +209,10 @@ func (s *tuiState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				vals := s.form.Values()
 				s.name = vals["Project name"]
 				s.owner = vals["GitHub owner"]
-				s.done = true
 				s.Quit = true
+				s.runAfterQuit = func() {
+					runCLI(s.name, s.owner, "")
+				}
 				return s, tea.Quit
 			case "cancelled":
 				s.Step = 0
