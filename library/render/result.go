@@ -45,13 +45,14 @@ func errorResult(e Error) *mcp.CallToolResult {
 	text, err := doc.String()
 	if err != nil {
 		yamlQuote := func(s string) string {
-			if strings.ContainsAny(s, ": #{}[]&*!|>'\"%@`\n") {
-				return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+			escaped := strings.NewReplacer("\\", "\\\\", `"`, `\"`, "\n", "\\n").Replace(s)
+			if strings.ContainsAny(s, ": #{}[]&*!|>'\"%@`\n") || escaped != s {
+				return `"` + escaped + `"`
 			}
 			return s
 		}
 		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n  hint: %s\n---\n## Error\n\n%s\n\n%s\n",
-			e.Code, yamlQuote(e.Message), yamlQuote(e.Hint), e.Message, e.Hint)
+			yamlQuote(e.Code), yamlQuote(e.Message), yamlQuote(e.Hint), e.Message, e.Hint)
 	}
 
 	return &mcp.CallToolResult{

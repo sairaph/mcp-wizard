@@ -65,6 +65,9 @@ type skipLoginMsg struct{}
 func (s *loginStep[T]) ID() string { return s.config.ID }
 
 func (s *loginStep[T]) Title(state *T) string {
+	if s.stateFn == nil {
+		return s.config.Label
+	}
 	lState := s.stateFn(state)
 	if lState == nil {
 		return s.config.Label
@@ -79,6 +82,9 @@ func (s *loginStep[T]) Title(state *T) string {
 }
 
 func (s *loginStep[T]) Hints(state *T) []struct{ Key, Label string } {
+	if s.stateFn == nil {
+		return nil
+	}
 	lState := s.stateFn(state)
 	if lState == nil {
 		return nil
@@ -114,6 +120,9 @@ type persistResultMsg struct {
 }
 
 func (s *loginStep[T]) Init(state *T) tea.Cmd {
+	if s.stateFn == nil {
+		return nil
+	}
 	lState := s.stateFn(state)
 	if lState == nil {
 		return nil
@@ -147,6 +156,9 @@ func (s *loginStep[T]) Init(state *T) tea.Cmd {
 }
 
 func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
+	if s.stateFn == nil {
+		return flow.Fail, nil
+	}
 	lState := s.stateFn(state)
 	if lState == nil {
 		return flow.Fail, nil
@@ -314,6 +326,9 @@ func (s *loginStep[T]) advanceStage(lState *LoginState) (flow.Directive, tea.Cmd
 }
 
 func (s *loginStep[T]) View(state *T) string {
+	if s.stateFn == nil {
+		return ""
+	}
 	lState := s.stateFn(state)
 	if lState == nil {
 		return ""

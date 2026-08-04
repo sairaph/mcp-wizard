@@ -100,19 +100,20 @@ func IsRunning(lockFile string) bool {
 // Stop stops a running daemon by sending a signal to the PID in the PID file.
 // Returns nil if the daemon was stopped, or an error if it couldn't be stopped.
 func Stop(pidFile, lockFile string) error {
+	if pidFile == "" {
+		return fmt.Errorf("daemon: pidFile is required to stop the daemon")
+	}
 	stopped := false
-	if pidFile != "" {
-		data, err := os.ReadFile(pidFile)
-		if err == nil {
-			pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-			if err == nil && pid > 0 {
-				proc, err := os.FindProcess(pid)
-				if err != nil {
-					return fmt.Errorf("find process %d: %w", pid, err)
-				}
-				if err := proc.Signal(os.Interrupt); err == nil {
-					stopped = true
-				}
+	data, err := os.ReadFile(pidFile)
+	if err == nil {
+		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err == nil && pid > 0 {
+			proc, err := os.FindProcess(pid)
+			if err != nil {
+				return fmt.Errorf("find process %d: %w", pid, err)
+			}
+			if err := proc.Signal(os.Interrupt); err == nil {
+				stopped = true
 			}
 		}
 	}

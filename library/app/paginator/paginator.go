@@ -96,8 +96,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 
 func (m *Model) View() string {
 	totalPages := m.TotalPages()
-	if totalPages > 0 && m.Page >= totalPages {
-		m.Page = totalPages - 1
+	page := m.Page
+	if totalPages > 0 && page >= totalPages {
+		page = totalPages - 1
 	}
 
 	var out strings.Builder
@@ -112,7 +113,7 @@ func (m *Model) View() string {
 	// Footer
 	var footer string
 	if totalPages > 0 {
-		footer = fmt.Sprintf("  page %d/%d (%d items)", m.Page+1, totalPages, m.Total)
+		footer = fmt.Sprintf("  page %d/%d (%d items)", page+1, totalPages, m.Total)
 	} else {
 		footer = fmt.Sprintf("  %d items", m.Total)
 	}

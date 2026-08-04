@@ -38,6 +38,9 @@ func New(socketDir, name string) *Server {
 }
 
 func (s *Server) Handle(method string, handler Handler) {
+	if handler == nil {
+		panic("socket: Handle requires a non-nil handler")
+	}
 	s.mu.Lock()
 	s.handlers[method] = handler
 	s.mu.Unlock()
@@ -107,6 +110,9 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
+			// Send error response before closing so the client doesn't hang.
+			errResp := rpc.NewErrorResponse(0, rpc.CodeParse, "invalid request: "+err.Error())
+			enc.Encode(errResp)
 			return
 		}
 		resp := s.dispatch(ctx, req)

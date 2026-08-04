@@ -33,6 +33,11 @@ func Dial(socketPath string) (*Client, error) {
 	}, nil
 }
 
+type callResult struct {
+	resp rpc.Response
+	err  error
+}
+
 func (c *Client) Call(ctx context.Context, method string, params, result any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -45,29 +50,48 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 		return fmt.Errorf("create request: %w", err)
 	}
 
-	if err := c.enc.Encode(req); err != nil {
-		return fmt.Errorf("send request: %w", err)
-	}
-
-	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-	var resp rpc.Response
-	if err := c.dec.Decode(&resp); err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-	if resp.Error != nil {
-		return fmt.Errorf("daemon error: %s", resp.Error.Message)
-	}
-	if resp.ID != id {
-		return fmt.Errorf("daemon: response ID %d does not match request ID %d", resp.ID, id)
-	}
-	if result != nil && resp.Result != nil {
-		if err := json.Unmarshal(resp.Result, result); err != nil {
-			return fmt.Errorf("decode result: %w", err)
+	ch := make(chan callResult, 1)
+	go func() {
+		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		if err := c.enc.Encode(req); err != nil {
+			ch <- callResult{err: fmt.Errorf("send request: %w", err)}
+			return
 		}
+		var resp rpc.Response
+		if err := c.dec.Decode(&resp); err != nil {
+			ch <- callResult{err: fmt.Errorf("read response: %w", err)}
+			return
+		}
+		ch <- callResult{resp: resp}
+	}()
+
+	select {
+	case <-ctx.Done():
+		// Close the connection to unblock the goroutine immediately.
+		// The client must be re-dialed after a cancelled call.
+		c.conn.Close()
+		return ctx.Err()
+	case r := <-ch:
+		if r.err != nil {
+			return r.err
+		}
+		if r.resp.Error != nil {
+			return fmt.Errorf("daemon error: %s", r.resp.Error.Message)
+		}
+		if r.resp.ID != id {
+			return fmt.Errorf("daemon: response ID %d does not match request ID %d", r.resp.ID, id)
+		}
+		if result != nil && r.resp.Result != nil {
+			if err := json.Unmarshal(r.resp.Result, result); err != nil {
+				return fmt.Errorf("decode result: %w", err)
+			}
+		}
+		return nil
 	}
-	return nil
 }
 
 func (c *Client) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.conn.Close()
 }

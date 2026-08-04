@@ -131,10 +131,16 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		case "pgup":
 			m.Viewport.ViewUp()
+			for i := 0; i < m.Viewport.Height && m.Cursor > 0; i++ {
+				m.Cursor--
+			}
 			m.render()
 			return nil
 		case "pgdown":
 			m.Viewport.ViewDown()
+			for i := 0; i < m.Viewport.Height && m.Cursor < len(m.Items)-1; i++ {
+				m.Cursor++
+			}
 			m.render()
 			return nil
 		case "home", "g":

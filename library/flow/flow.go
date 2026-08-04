@@ -2,6 +2,7 @@ package flow
 
 import (
 	"fmt"
+	"reflect"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -113,6 +114,10 @@ func (m *flowModel[T]) Init() tea.Cmd {
 	if m.step == nil {
 		return tea.Quit
 	}
+	v := reflect.ValueOf(m.step)
+	if v.Kind() == reflect.Ptr && v.IsNil() {
+		return tea.Quit
+	}
 	return m.step.Init(m.flow.state)
 }
 
@@ -152,6 +157,10 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.step == nil {
 			return m, tea.Quit
 		}
+		v := reflect.ValueOf(m.step)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
+			return m, tea.Quit
+		}
 		initCmd := m.step.Init(m.flow.state)
 		return m, tea.Batch(stepCmd, initCmd)
 
@@ -162,6 +171,10 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.step = m.flow.steps[m.flow.current]
 		if m.step == nil {
+			return m, tea.Quit
+		}
+		v := reflect.ValueOf(m.step)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
 			return m, tea.Quit
 		}
 		initCmd := m.step.Init(m.flow.state)
@@ -176,6 +189,10 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.step = m.flow.steps[m.flow.current]
 		if m.step == nil {
+			return m, tea.Quit
+		}
+		v := reflect.ValueOf(m.step)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
 			return m, tea.Quit
 		}
 		initCmd := m.step.Init(m.flow.state)
@@ -208,6 +225,10 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.step == nil {
 			return m, tea.Quit
 		}
+		v := reflect.ValueOf(m.step)
+		if v.Kind() == reflect.Ptr && v.IsNil() {
+			return m, tea.Quit
+		}
 		initCmd := m.step.Init(m.flow.state)
 		return m, tea.Batch(stepCmd, initCmd)
 
@@ -222,7 +243,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.flow.flowFailure = fmt.Errorf("flow: step %q returned Fail", m.step.ID())
 		}
-		return m, tea.Quit
+		return m, tea.Batch(cmd, tea.Quit)
 
 	default:
 		return m, cmd

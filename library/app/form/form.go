@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sairaph/mcp-wizard/app"
 )
@@ -21,11 +21,11 @@ type Field struct {
 
 // Model is the form state.
 type Model struct {
-	Title   string
-	Fields  []Field
-	Inputs  []textinput.Model
-	Focused int
-	Error   string
+	Title     string
+	Fields    []Field
+	Inputs    []textinput.Model
+	Focused   int
+	Error     string
 	Submitted bool
 
 	styleTitle lipgloss.Style
@@ -36,9 +36,9 @@ type Model struct {
 // New creates a form with the given title and fields.
 func New(title string, fields []Field) *Model {
 	m := &Model{
-		Title:   title,
-		Fields:  fields,
-		Focused: 0,
+		Title:      title,
+		Fields:     fields,
+		Focused:    0,
 		styleTitle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("81")),
 		styleDim:   lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
 		styleError: lipgloss.NewStyle().Foreground(lipgloss.Color("203")),
@@ -118,12 +118,12 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		case "enter":
 			m.Error = ""
-		for i, f := range m.Fields {
-			if i >= len(m.Inputs) {
-				break
-			}
-			if f.Validate != nil {
-				if err := f.Validate(m.Inputs[i].Value()); err != nil {
+			for i, f := range m.Fields {
+				if i >= len(m.Inputs) {
+					break
+				}
+				if f.Validate != nil {
+					if err := f.Validate(m.Inputs[i].Value()); err != nil {
 						m.Error = err.Error()
 						m.Focused = i
 						for j := range m.Inputs {
@@ -147,7 +147,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	if len(m.Inputs) == 0 {
 		return nil
 	}
-	if len(m.Inputs) == 0 || m.Focused < 0 || m.Focused >= len(m.Inputs) {
+	if m.Focused < 0 || m.Focused >= len(m.Inputs) {
 		return nil
 	}
 	var cmd tea.Cmd
@@ -157,7 +157,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 
 func (m *Model) View() string {
 	var out strings.Builder
-	out.WriteString(m.styleTitle.Render("  " + m.Title) + "\n\n")
+	out.WriteString(m.styleTitle.Render("  "+m.Title) + "\n\n")
 
 	for i, input := range m.Inputs {
 		if i >= len(m.Fields) {

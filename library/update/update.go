@@ -262,24 +262,24 @@ func swapFile(source, target string) error {
 			}
 		}
 	}
-	if oldTarget != "" {
-		defer os.Remove(oldTarget)
-	}
-
 	err := os.Rename(source, target)
 	if err != nil {
-		// If the rename failed and we moved the old binary aside, restore it.
-		if oldTarget != "" {
-			// Best-effort restore failed — binary may be lost.
-		}
 		if errors.Is(err, syscall.EXDEV) {
 			if err := copyFile(source, target); err != nil {
 				return fmt.Errorf("copy binary across devices: %w", err)
 			}
-			os.Remove(source)
+			if err := os.Remove(source); err != nil {
+				// Non-fatal: temp file may be on a different filesystem
+			}
 			return nil
 		}
+		if oldTarget != "" {
+			os.Rename(oldTarget, target)
+		}
 		return fmt.Errorf("rename: %w", err)
+	}
+	if oldTarget != "" {
+		os.Remove(oldTarget)
 	}
 	return nil
 }
@@ -293,7 +293,6 @@ func copyFile(src, dst string) error {
 
 	out, err := os.Create(dst)
 	if err != nil {
-		in.Close()
 		return err
 	}
 
