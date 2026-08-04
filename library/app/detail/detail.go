@@ -54,7 +54,11 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.Width = msg.Width
 		m.Height = msg.Height
 		m.Viewport.Width = msg.Width
-		m.Viewport.Height = msg.Height - 3
+		h := msg.Height - 3
+		if h < 1 {
+			h = 1
+		}
+		m.Viewport.Height = h
 		m.Viewport.SetContent(m.Content)
 
 	case tea.KeyMsg:

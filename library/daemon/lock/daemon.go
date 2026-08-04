@@ -59,7 +59,7 @@ func Open(opts Options) (*Instance, error) {
 	}
 
 	if opts.PIDFile != "" {
-		if err := os.WriteFile(opts.PIDFile, []byte(strconv.Itoa(os.Getpid())+"\n"), 0644); err != nil {
+		if err := os.WriteFile(opts.PIDFile, []byte(strconv.Itoa(os.Getpid())+"\n"), 0600); err != nil {
 			inst.Close()
 			return nil, fmt.Errorf("write PID file: %w", err)
 		}
@@ -107,12 +107,12 @@ func Stop(pidFile, lockFile string) error {
 			pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 			if err == nil && pid > 0 {
 				proc, err := os.FindProcess(pid)
-			if err != nil {
-				return fmt.Errorf("find process %d: %w", pid, err)
-			}
-			if err := proc.Signal(os.Interrupt); err == nil {
-				stopped = true
-			}
+				if err != nil {
+					return fmt.Errorf("find process %d: %w", pid, err)
+				}
+				if err := proc.Signal(os.Interrupt); err == nil {
+					stopped = true
+				}
 			}
 		}
 	}

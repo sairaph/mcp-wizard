@@ -23,7 +23,6 @@ function Get-OS {
 
 $os = Get-OS
 $arch = Get-Arch
-$assetName = "$Bin-$os-$arch.exe"
 $asset = "$Bin-$os-$arch.exe"
 $url = "https://github.com/$Owner/$Repo/releases/latest/download/$asset"
 $localAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $env:USERPROFILE "AppData\Local" }
@@ -49,10 +48,12 @@ if (-not (Test-Path "$target.new")) {
 }
 
 # Verify SHA256 checksum
-$checksumUrl = $url.Substring(0, $url.LastIndexOf('/')) + '/SHA256SUMS.txt'
+$lastSlash = $url.LastIndexOf('/')
+if ($lastSlash -le 0) { exit 1 }
+$checksumUrl = $url.Substring(0, $lastSlash) + '/SHA256SUMS.txt'
 try {
     $checksums = (Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing).Content
-    $pattern = ' ' + [regex]::Escape($assetName) + '\s*$'
+    $pattern = ' ' + [regex]::Escape($asset) + '\s*$'
     $expectedHash = ($checksums -split "`n" | ForEach-Object { $_.TrimEnd("`r") } | Where-Object { $_ -match $pattern }) -split ' ' | Select-Object -First 1
     if ($expectedHash) {
         $actualHash = (Get-FileHash -Path "$target.new" -Algorithm SHA256).Hash.ToLower()
@@ -95,7 +96,7 @@ if ($userPath -notlike "*$installDir*") {
 
 # --- launch the configurer ---
 try {
-    & $target configure
+    & $target configure $ConfigureArgs
 } catch {
     Write-Host "  configure did not complete: $_" -ForegroundColor Red
     Write-Host "  Re-run ``$Bin configure`` later to finish setup." -ForegroundColor Yellow

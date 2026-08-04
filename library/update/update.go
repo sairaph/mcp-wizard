@@ -270,7 +270,7 @@ func swapFile(source, target string) error {
 	if err != nil {
 		// If the rename failed and we moved the old binary aside, restore it.
 		if oldTarget != "" {
-			os.Rename(oldTarget, target) // best-effort restore
+			// Best-effort restore failed — binary may be lost.
 		}
 		if errors.Is(err, syscall.EXDEV) {
 			if err := copyFile(source, target); err != nil {

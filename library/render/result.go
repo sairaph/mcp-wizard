@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -43,7 +44,14 @@ func errorResult(e Error) *mcp.CallToolResult {
 	doc := Document{Front: front, Body: body, IsError: true}
 	text, err := doc.String()
 	if err != nil {
-		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n  hint: %s\n---\n## Error\n\n%s\n\n%s\n", e.Code, e.Message, e.Hint, e.Message, e.Hint)
+		yamlQuote := func(s string) string {
+			if strings.ContainsAny(s, ": #{}[]&*!|>'\"%@`\n") {
+				return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+			}
+			return s
+		}
+		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n  hint: %s\n---\n## Error\n\n%s\n\n%s\n",
+			e.Code, yamlQuote(e.Message), yamlQuote(e.Hint), e.Message, e.Hint)
 	}
 
 	return &mcp.CallToolResult{

@@ -55,10 +55,12 @@ func Parse(args []string) (Command, error) {
 	switch cmd.Name {
 	case "help":
 		cmd.Name = "help"
+		cmd.Args = tail
 		return cmd, ErrUsage
 
 	case "version":
 		cmd.Name = "version"
+		cmd.Args = tail
 		return cmd, nil
 
 	case "install", "configure", "uninstall":

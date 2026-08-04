@@ -22,7 +22,7 @@ type Server struct {
 	listener   net.Listener
 	handlers   map[string]Handler
 	flock        *flock.Flock
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	wg           sync.WaitGroup
 	cleanupOnce  sync.Once
 	ctx          context.Context
@@ -38,7 +38,9 @@ func New(socketDir, name string) *Server {
 }
 
 func (s *Server) Handle(method string, handler Handler) {
+	s.mu.Lock()
 	s.handlers[method] = handler
+	s.mu.Unlock()
 }
 
 func (s *Server) Open() error {
@@ -108,12 +110,17 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 			return
 		}
 		resp := s.dispatch(ctx, req)
-		enc.Encode(resp)
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err := enc.Encode(resp); err != nil {
+			return
+		}
 	}
 }
 
 func (s *Server) dispatch(ctx context.Context, req rpc.Request) rpc.Response {
+	s.mu.RLock()
 	handler, ok := s.handlers[req.Method]
+	s.mu.RUnlock()
 	if !ok {
 		return rpc.NewErrorResponse(req.ID, rpc.CodeMethod, "unknown method: "+req.Method)
 	}

@@ -49,16 +49,6 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 		return fmt.Errorf("send request: %w", err)
 	}
 
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-done:
-		case <-ctx.Done():
-			c.conn.SetReadDeadline(time.Now())
-		}
-	}()
-	defer close(done)
-
 	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	var resp rpc.Response
 	if err := c.dec.Decode(&resp); err != nil {

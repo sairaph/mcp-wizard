@@ -70,6 +70,9 @@ type detectedMsg struct {
 }
 
 func (s *harnessStep[T]) Init(state *T) tea.Cmd {
+	if s.stateFn == nil {
+		return nil
+	}
 	hState := s.stateFn(state)
 	if hState == nil {
 		return nil
@@ -83,23 +86,26 @@ func (s *harnessStep[T]) Init(state *T) tea.Cmd {
 }
 
 func (s *harnessStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
+	if s.stateFn == nil {
+		return flow.Fail, nil
+	}
 	hState := s.stateFn(state)
 	if hState == nil {
 		return flow.Fail, nil
 	}
 
-	switch msg := msg.(type) {
+	switch m := msg.(type) {
 	case detectedMsg:
-		hState.Detections = msg.harnesses
+		hState.Detections = m.harnesses
 		hState.Selected = make(map[harness.ID]bool)
-		for _, h := range msg.harnesses {
+		for _, h := range m.harnesses {
 			if h.Configured || (s.opts.AllDetected && h.Selectable()) {
 				hState.Selected[h.ID] = true
 			}
 		}
-		hState.Cursor = FirstSelectable(msg.harnesses)
+		hState.Cursor = FirstSelectable(m.harnesses)
 		if hState.Cursor < 0 {
-			indices := VisibleIndices(msg.harnesses, false)
+			indices := VisibleIndices(m.harnesses, false)
 			if len(indices) > 0 {
 				hState.Cursor = indices[0]
 			}
@@ -109,13 +115,13 @@ func (s *harnessStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd)
 
 	case tea.KeyMsg:
 		if !s.ready {
-			if msg.String() == "q" || msg.String() == "ctrl+c" {
+			if m.String() == "q" || m.String() == "ctrl+c" {
 				return flow.Quit, nil
 			}
 			return flow.Continue, nil
 		}
 
-		switch msg.String() {
+		switch m.String() {
 		case "q", "ctrl+c":
 			return flow.Quit, nil
 		case "up", "k":
@@ -128,6 +134,21 @@ func (s *harnessStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd)
 			ToggleAll(hState)
 		case "v":
 			hState.ShowAll = !hState.ShowAll
+			if !hState.ShowAll {
+				indices := VisibleIndices(hState.Detections, false)
+				if len(indices) > 0 {
+					found := false
+					for _, idx := range indices {
+						if idx == hState.Cursor {
+							found = true
+							break
+						}
+					}
+					if !found {
+						hState.Cursor = indices[0]
+					}
+				}
+			}
 		case "enter":
 			count := 0
 			for _, v := range hState.Selected {
@@ -143,10 +164,18 @@ func (s *harnessStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd)
 			return flow.Back, nil
 		}
 	}
+
+	if tui.IsSpinMsg(msg) && !s.ready {
+		return flow.Continue, tui.Spinner()
+	}
+
 	return flow.Continue, nil
 }
 
 func (s *harnessStep[T]) View(state *T) string {
+	if s.stateFn == nil {
+		return ""
+	}
 	hState := s.stateFn(state)
 	if hState == nil {
 		return ""
@@ -218,7 +247,7 @@ func VisibleIndices(harnesses []harness.Harness, showAll bool) []int {
 
 func FirstSelectable(harnesses []harness.Harness) int {
 	for i, h := range harnesses {
-		if h.Selectable() && h.State == harness.Detected {
+		if h.Selectable() {
 			return i
 		}
 	}

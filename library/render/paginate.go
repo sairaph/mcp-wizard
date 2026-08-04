@@ -10,6 +10,7 @@ type PageMeta struct {
 }
 
 // NextPageHint returns "Next: page=N." or "" if this is the last page.
+// Page is 0-indexed (first page is page 0).
 func NextPageHint(meta PageMeta) string {
 	if meta.TotalPages <= 1 || meta.Page >= meta.TotalPages-1 {
 		return ""

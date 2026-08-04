@@ -87,7 +87,11 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.Width = msg.Width
 		m.Height = msg.Height
 		m.Viewport.Width = msg.Width
-		m.Viewport.Height = msg.Height - 6
+		h := msg.Height - 6
+		if h < 1 {
+			h = 1
+		}
+		m.Viewport.Height = h
 
 	case tea.KeyMsg:
 		switch msg.String() {

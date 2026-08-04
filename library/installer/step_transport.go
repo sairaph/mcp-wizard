@@ -95,6 +95,8 @@ func (s *transportStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cm
 			}
 		} else {
 			switch msg.String() {
+			case "q", "ctrl+c":
+				return flow.Quit, nil
 			case "enter":
 				if ts.Input == "" {
 					ts.Input = "127.0.0.1:8080"
@@ -104,15 +106,15 @@ func (s *transportStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cm
 			case "esc":
 				ts.Stage = 0
 				return flow.Continue, nil
-		case "backspace":
-			if len(ts.Input) > 0 {
-				runes := []rune(ts.Input)
-				ts.Input = string(runes[:len(runes)-1])
-			}
-		default:
-			if len(msg.Runes) > 0 {
-				ts.Input += string(msg.Runes)
-			}
+			case "backspace":
+				if len(ts.Input) > 0 {
+					runes := []rune(ts.Input)
+					ts.Input = string(runes[:len(runes)-1])
+				}
+			default:
+				if len(msg.Runes) > 0 {
+					ts.Input += string(msg.Runes)
+				}
 			}
 		}
 	}

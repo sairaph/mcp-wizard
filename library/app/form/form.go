@@ -75,7 +75,12 @@ func (m *Model) Values() map[string]string {
 	return result
 }
 
-func (m *Model) Init() tea.Cmd { return nil }
+func (m *Model) Init() tea.Cmd {
+	if len(m.Inputs) > 0 {
+		return m.Inputs[0].Focus()
+	}
+	return nil
+}
 
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	if m.Submitted {

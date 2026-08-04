@@ -45,6 +45,11 @@ func main() {
 		os.Exit(2)
 	}
 
+	if *dir != "" && (*name == "" || *owner == "") {
+		fmt.Fprintf(os.Stderr, "Error: --dir requires --name and --owner\n")
+		os.Exit(2)
+	}
+
 	// Flags provided — run CLI mode.
 	if *name != "" && *owner != "" {
 		runCLI(*name, *owner, *dir)
@@ -80,6 +85,11 @@ func runCLI(name, owner, dir string) {
 		targetDir = "./" + name
 	}
 
+	if _, err := exec.LookPath("go"); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: go is not installed. Install Go from https://go.dev/dl/\n")
+		os.Exit(1)
+	}
+
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating directory: %v\n", err)
 		os.Exit(1)
@@ -95,11 +105,6 @@ func runCLI(name, owner, dir string) {
 	}
 
 	modulePath := fmt.Sprintf("github.com/%s/%s", strings.ToLower(owner), strings.ToLower(name))
-
-	if _, err := exec.LookPath("go"); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: go is not installed. Install Go from https://go.dev/dl/\n")
-		os.Exit(1)
-	}
 
 	subs := map[string]string{
 		"Name":       name,

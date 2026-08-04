@@ -9,7 +9,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sairaph/mcp-wizard/app"
-	"github.com/sairaph/mcp-wizard/app/menu"
 	"github.com/sairaph/mcp-wizard/cli"
 	"github.com/sairaph/mcp-wizard/command"
 	"github.com/sairaph/mcp-wizard/flow"
@@ -79,6 +78,7 @@ func main() {
 		if tui.IsInteractive() {
 			os.Exit(runApp(ctx))
 		}
+		fmt.Fprintf(os.Stderr, "Unknown command: %s. Running MCP server.\n", cmd.Name)
 		os.Exit(runMCPServer(ctx))
 	}
 }
@@ -233,16 +233,6 @@ func (m *appState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *appState) View() string {
 	return ""
-}
-
-func buildMenu() []menu.Item {
-	return []menu.Item{
-		{Label: "Browse", Action: "browse"},
-		{Label: "Search", Action: "search"},
-		{Label: "Settings", Action: "settings"},
-		{Label: "Configure AI clients", Action: "configure"},
-		{Label: "Quit", Action: "quit"},
-	}
 }
 
 // --- MCP Server ---

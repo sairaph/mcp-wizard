@@ -212,7 +212,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(stepCmd, initCmd)
 
 	case Quit:
-		return m, tea.Quit
+		return m, tea.Batch(cmd, tea.Quit)
 
 	case Fail:
 		if base := m.flow.getBaseState(); base != nil {
