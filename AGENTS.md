@@ -2,10 +2,10 @@
 
 ## Workflow
 
-Every task — feature, bugfix, refactor — follows this loop. No exceptions.
+Every project or version follows this loop. No exceptions.
 
-### 1. Analyze
-Run 2+ parallel agents to explore the existing implementation and identify gaps. If scope is large, add more agents to cover all paths and edge cases.
+### 1. Analyze (project-level, once)
+Run agents to explore the existing implementation, new requirements, external dependencies, and identify gaps. Scale the number of agents to the scope. Small tasks may need one agent; large scopes should run multiple parallel agents to cover all paths and edge cases.
 
 ### 2. Plan
 Synthesize findings. Run a plan-review agent before implementation. Break large scopes into small, independently shippable tasks.
@@ -21,6 +21,9 @@ After all tasks land, run 5 parallel review agents across the full codebase. Fix
 
 ### 6. Validate and Test
 Only after all reviews are green: run `go vet ./...` for validation, then run the test suite. When a test fails, first analyze whether the test is correct given the functional requirements before deciding whether to fix the test or fix the code.
+
+### Escalation
+During execution, if an agent struggles through multiple review-fix loops unable to resolve something, stop and run additional analysis agents with online search to find the root cause before continuing. Do not loop endlessly on the same issue.
 
 ### Rules
 - **Separate agents for dev and review.** Never review your own code.
