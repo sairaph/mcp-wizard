@@ -35,6 +35,9 @@ func New(title, detail, confirm, cancel string) *Model {
 func (m *Model) Init() tea.Cmd { return nil }
 
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
+	if m.Choice < 0 || m.Choice > 1 {
+		m.Choice = 0
+	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {

@@ -114,6 +114,9 @@ func (s *FileStore) Load(ctx context.Context) (*Session, bool, error) {
 	if err := json.Unmarshal(data, &sess.Values); err != nil {
 		return nil, false, fmt.Errorf("parse credentials: %w", err)
 	}
+	if sess.Values == nil {
+		sess.Values = make(map[string]any)
+	}
 	return sess, true, nil
 }
 
@@ -167,7 +170,12 @@ func (s *EnvStore) Load(_ context.Context) (*Session, bool, error) {
 }
 
 func (s *EnvStore) Delete(_ context.Context) error { return nil }
-func (s *EnvStore) Path() string                   { return s.path }
+func (s *EnvStore) Path() string {
+	if s == nil {
+		return ""
+	}
+	return s.path
+}
 
 // RetryableError signals a login stage failure that should re-prompt
 // rather than aborting the login flow.

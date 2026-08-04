@@ -33,7 +33,7 @@ func PrintResults(w io.Writer, results []harness.Result, enabling, dryRun bool) 
 		case harness.ApplyFailed:
 			status = "failed: " + r.Reason
 		}
-		if dryRun {
+		if dryRun && (r.State == harness.Applied || r.State == harness.ApplyNoop) {
 			if enabling {
 				status = "would register"
 			} else {

@@ -180,6 +180,10 @@ func runUninstall(ctx context.Context, cmd cli.Command) int {
 // --- Login ---
 
 func runLogin(ctx context.Context, cmd cli.Command) int {
+	if !tui.IsInteractive() {
+		fmt.Fprintln(os.Stderr, "login requires an interactive terminal")
+		return 1
+	}
 	credStore := secret.NewFileStore(domain.CredentialPath())
 	state := &AppState{}
 	step := installer.LoginStep(ctx, domain.LoginConfig(credStore),
@@ -193,14 +197,14 @@ func runLogin(ctx context.Context, cmd cli.Command) int {
 // --- Doctor ---
 
 func runDoctor(ctx context.Context) int {
-	// Uses doctor package for health checks.
+	fmt.Println("  Run `go vet ./... && go test ./...` to check your project.")
 	return 0
 }
 
 // --- Update ---
 
 func runUpdate(ctx context.Context, cmd cli.Command) int {
-	// Uses update package for self-update.
+	fmt.Println("  Update check not yet implemented.")
 	return 0
 }
 
@@ -258,7 +262,7 @@ func runMCPServer(ctx context.Context) int {
 		Transport: transport,
 		HTTPAddr:  addr,
 	})
-	if err := srv.Run(ctx); err != nil {
+	if err := srv.Run(ctx); err != nil && err != context.Canceled {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

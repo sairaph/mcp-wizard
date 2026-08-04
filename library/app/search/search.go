@@ -116,18 +116,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 				m.renderResults()
 			}
 			return nil
-		case "home", "g":
-			m.Cursor = 0
-			m.Viewport.GotoTop()
-			m.renderResults()
-			return nil
-		case "end", "G":
-			if len(m.Results) > 0 {
-				m.Cursor = len(m.Results) - 1
-				m.Viewport.GotoBottom()
-				m.renderResults()
-			}
-			return nil
+
 		case "esc":
 			return app.Action("search", "cancelled")
 		}

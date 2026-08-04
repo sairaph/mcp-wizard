@@ -67,6 +67,9 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 	if resp.Error != nil {
 		return fmt.Errorf("daemon error: %s", resp.Error.Message)
 	}
+	if resp.ID != id {
+		return fmt.Errorf("daemon: response ID %d does not match request ID %d", resp.ID, id)
+	}
 	if result != nil && resp.Result != nil {
 		if err := json.Unmarshal(resp.Result, result); err != nil {
 			return fmt.Errorf("decode result: %w", err)

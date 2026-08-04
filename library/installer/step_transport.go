@@ -104,12 +104,15 @@ func (s *transportStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cm
 			case "esc":
 				ts.Stage = 0
 				return flow.Continue, nil
-			case "backspace":
-				if len(ts.Input) > 0 {
-					ts.Input = ts.Input[:len(ts.Input)-1]
-				}
-			default:
-				ts.Input += msg.String()
+		case "backspace":
+			if len(ts.Input) > 0 {
+				runes := []rune(ts.Input)
+				ts.Input = string(runes[:len(runes)-1])
+			}
+		default:
+			if len(msg.Runes) > 0 {
+				ts.Input += string(msg.Runes)
+			}
 			}
 		}
 	}

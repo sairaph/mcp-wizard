@@ -116,9 +116,6 @@ func Stop(pidFile, lockFile string) error {
 			}
 		}
 	}
-	if stopped && lockFile != "" {
-		os.Remove(lockFile)
-	}
 	if !stopped {
 		return fmt.Errorf("daemon: could not stop process")
 	}

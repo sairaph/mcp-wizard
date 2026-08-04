@@ -79,7 +79,10 @@ func (s *Server) runHTTP(ctx context.Context) error {
 	}()
 
 	fmt.Fprintf(os.Stderr, "${ServerName} listening on %s (Streamable HTTP)\n", addr)
-	return httpServer.ListenAndServe()
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("serve http: %w", err)
+	}
+	return nil
 }
 
 // Register a tool:

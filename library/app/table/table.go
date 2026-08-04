@@ -72,6 +72,7 @@ func (m *Model) render() {
 	var out strings.Builder
 
 	// Header row.
+	out.WriteString("  ") // align with data rows
 	for i, col := range m.Columns {
 		name := col.Name
 		if i == m.SortBy {
@@ -130,11 +131,13 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		case "home", "g":
 			m.Cursor = 0
+			m.Viewport.GotoTop()
 			m.render()
 			return nil
 		case "end", "G":
 			if len(m.Rows) > 0 {
 				m.Cursor = len(m.Rows) - 1
+				m.Viewport.GotoBottom()
 				m.render()
 			}
 			return nil

@@ -60,6 +60,10 @@ func Wrap(text string, width int) []string {
 	}
 	var lines []string
 	for _, line := range strings.Split(text, "\n") {
+		if line == "" {
+			lines = append(lines, "")
+			continue
+		}
 		runes := []rune(line)
 		for len(runes) > width {
 			lines = append(lines, string(runes[:width]))

@@ -13,6 +13,9 @@ func (m *AppModel) Init() tea.Cmd {
 // HandleGlobalKeys processes keys that work across all screens.
 // Returns true if the key was handled (caller should return immediately).
 func (m *AppModel) HandleGlobalKeys(msg tea.Msg) bool {
+	if m == nil {
+		return false
+	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {

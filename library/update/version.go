@@ -24,6 +24,11 @@ func Parse(s string) (Version, error) {
 		return Version{}, fmt.Errorf("empty version string")
 	}
 
+	// Strip build metadata (everything after +).
+	if idx := strings.IndexByte(s, '+'); idx >= 0 {
+		s = s[:idx]
+	}
+
 	parts := strings.SplitN(s, "-", 2)
 	nums := strings.Split(parts[0], ".")
 	if len(nums) != 3 {

@@ -93,4 +93,12 @@ if ($userPath -notlike "*$installDir*") {
   Write-Host "  Added $installDir to your PATH. Restart your terminal."
 }
 
+# --- launch the configurer ---
+try {
+    & $target configure
+} catch {
+    Write-Host "  configure did not complete: $_" -ForegroundColor Red
+    Write-Host "  Re-run ``$Bin configure`` later to finish setup." -ForegroundColor Yellow
+}
+
 Write-Host "  Installed $Bin to $target"

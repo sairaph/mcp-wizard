@@ -109,7 +109,7 @@ PATH="$INSTALL_DIR:$PATH"
 export PATH
 
 if ( : </dev/tty ) 2>/dev/null; then
-  "$TARGET" configure </dev/tty || {
+  "$TARGET" configure $CONFIGURE_ARGS </dev/tty || {
     printf '  configure did not complete.\n'
     printf '  Re-run `%s configure` later to finish setup.\n' "$BIN"
   }

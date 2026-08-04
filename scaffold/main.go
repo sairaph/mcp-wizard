@@ -40,6 +40,11 @@ func main() {
 	dir := flag.String("dir", "", "target directory (default: ./<name>)")
 	flag.Parse()
 
+	if (*name == "") != (*owner == "") {
+		fmt.Fprintf(os.Stderr, "Error: --name and --owner must be provided together\n")
+		os.Exit(2)
+	}
+
 	// Flags provided — run CLI mode.
 	if *name != "" && *owner != "" {
 		runCLI(*name, *owner, *dir)
@@ -170,6 +175,11 @@ func (s *tuiState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if s.Step == 99 {
+			s.Step = 0
+			return s, nil
+		}
 	case app.ActionMsg:
 		switch msg.Source {
 		case "menu":
@@ -197,7 +207,8 @@ func (s *tuiState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					})
 					return s, s.form.Init()
 				case "help":
-					s.Status = "mcp-wizard new --name <name> --owner <owner> [--dir <dir>]"
+					s.Step = 99 // help screen
+					return s, nil
 				case "quit":
 					s.Quit = true
 					return s, tea.Quit
@@ -234,6 +245,9 @@ func (s *tuiState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (s *tuiState) View() string {
+	if s.Step == 99 {
+		return "mcp-wizard new --name <name> --owner <owner> [--dir <dir>]\n\nPress any key to return."
+	}
 	if s.Step == 0 && s.menu != nil {
 		return s.menu.View()
 	}
