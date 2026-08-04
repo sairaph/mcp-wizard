@@ -19,10 +19,17 @@ Immediately after each dev agent completes, run a separate review agent on that 
 ### 5. Cross-Cutting Review
 After all tasks land, run 5 parallel review agents across the full codebase. Fix findings with targeted dev agents. Repeat until all agents return CLEAR.
 
+### 6. Validate and Test
+Only after all reviews are green: run `go vet ./...` for validation, then run the test suite. When a test fails, first analyze whether the test is correct given the functional requirements before deciding whether to fix the test or fix the code.
+
 ### Rules
 - **Separate agents for dev and review.** Never review your own code.
 - **Small scope per agent.** If an agent's task is too big, split it.
 - **Parallelize.** Independent tasks and independent reviews run in parallel.
-- **Fix with separate agents.** After a review finds bugs, launch targeted fix agents — don't edit inline.
-- **Verify after every change.** `go vet ./... && go test -race ./...` after every fix.
+- **Fix with separate agents.** After a review finds bugs, launch targeted fix agents - don't edit inline.
+- **Validate after every change.** `go vet ./...` after every fix. Do NOT run the test suite until reviews are green and tests are updated.
+- **Failed tests need analysis.** Before fixing a failed test, determine whether the test correctly checks the functional requirement. Fix the test if it's wrong; fix the code if the test is right.
 - **No shortcuts.** Full scope, every feature, no deferrals.
+
+### Hard formatting rules
+- **No em dashes or en dashes.** Use hyphens (-) only. This applies to every file in the project: source code, documentation, comments, templates, scripts, everything.
