@@ -228,7 +228,20 @@ func buildMenu() []menu.Item {
 // --- MCP Server ---
 
 func runMCPServer(ctx context.Context) int {
-	srv := mcpserver.New(version)
+	transport := os.Getenv("TRANSPORT")
+	if transport == "" {
+		transport = "stdio"
+	}
+	addr := os.Getenv("ADDR")
+	if addr == "" {
+		addr = "127.0.0.1:8080"
+	}
+
+	srv := mcpserver.New(mcpserver.Config{
+		Version:   version,
+		Transport: transport,
+		HTTPAddr:  addr,
+	})
 	if err := srv.Run(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

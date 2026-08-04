@@ -3,22 +3,40 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// Config holds the MCP server configuration.
+type Config struct {
+	Version   string
+	Transport string // "stdio" or "http"
+	HTTPAddr  string // listen address for HTTP mode (default "127.0.0.1:8080")
+}
+
 // Server wraps the MCP server and domain logic.
 type Server struct {
 	mcpServer *mcp.Server
+	config    Config
 }
 
-// New creates a new MCP server with the given version.
-func New(version string) *Server {
+// New creates a new MCP server with the given config.
+func New(config Config) *Server {
 	srv := &Server{
-		mcpServer: mcp.NewServer(mcp.ServerInfo{
-			Name:    "${ServerName}",
-			Version: version,
-		}),
+		config: config,
+		mcpServer: mcp.NewServer(
+			&mcp.Implementation{
+				Name:    "${ServerName}",
+				Version: config.Version,
+			},
+			&mcp.ServerOptions{
+				Capabilities: &mcp.ServerCapabilities{},
+			},
+		),
 	}
 
 	// Register your tools here.
@@ -28,11 +46,47 @@ func New(version string) *Server {
 	return srv
 }
 
-// Run starts the server and blocks until it exits.
+// Run starts the server and blocks until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
-	// By default, run as stdio server.
-	// Replace with SSE or other transport as needed.
-	return s.mcpServer.Serve(ctx)
+	switch s.config.Transport {
+	case "http":
+		return s.runHTTP(ctx)
+	default:
+		return s.runStdio(ctx)
+	}
+}
+
+func (s *Server) runStdio(ctx context.Context) error {
+	return s.mcpServer.Run(ctx, &mcp.StdioTransport{})
+}
+
+func (s *Server) runHTTP(ctx context.Context) error {
+	addr := s.config.HTTPAddr
+	if addr == "" {
+		addr = "127.0.0.1:8080"
+	}
+
+	handler := mcp.NewStreamableHTTPHandler(
+		func(r *http.Request) *mcp.Server {
+			return s.mcpServer
+		},
+		nil,
+	)
+
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: handler,
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		httpServer.Shutdown(shutdownCtx)
+	}()
+
+	fmt.Fprintf(os.Stderr, "${ServerName} listening on %s (Streamable HTTP)\n", addr)
+	return httpServer.ListenAndServe()
 }
 
 // Register a tool:

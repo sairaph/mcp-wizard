@@ -39,6 +39,9 @@ func LoginConfig(store secret.Store) installer.LoginConfig {
 }
 
 // DefaultEnv returns default environment variables for client configs.
+// The TRANSPORT variable is set by the install wizard's transport step.
 func DefaultEnv() map[string]string {
-	return nil
+	return map[string]string{
+		"TRANSPORT": "stdio",
+	}
 }
