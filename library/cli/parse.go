@@ -11,13 +11,15 @@ var ErrUsage = errors.New("usage")
 
 // Command carries the parsed subcommand and its flags.
 type Command struct {
-	Name    string            // subcommand name, "help", or "version"
-	Args    []string          // remaining positional args after subcommand + flags
-	Clients []string          // --clients (for install/configure)
-	All     bool              // --all
-	Yes     bool              // --yes
-	DryRun  bool              // --dry-run
-	ServerName string         // --name
+	Name       string   // subcommand name, "help", or "version"
+	Args       []string // remaining positional args after subcommand + flags
+	Clients    []string // --clients (for install/configure)
+	All        bool     // --all
+	Yes        bool     // --yes
+	DryRun     bool     // --dry-run
+	ServerName string   // --name
+	Scope      string   // --scope (e.g., "project")
+	Dir        string   // --dir (project directory, used with --scope project)
 
 	// Credentials carries --email, --token, etc. for unattended login.
 	Credentials map[string]string
@@ -70,6 +72,8 @@ func Parse(args []string) (Command, error) {
 		fs.BoolVar(&cmd.Yes, "yes", false, "non-interactive mode")
 		fs.BoolVar(&cmd.DryRun, "dry-run", false, "show what would change")
 		fs.StringVar(&cmd.ServerName, "name", "", "server name in client configs")
+		fs.StringVar(&cmd.Scope, "scope", "", "configuration scope (e.g., project)")
+		fs.StringVar(&cmd.Dir, "dir", "", "project directory (used with --scope project)")
 		// Credential flags are captured as key=value pairs.
 		email := fs.String("email", "", "email for authentication")
 		token := fs.String("token", "", "API token for authentication")
@@ -159,8 +163,28 @@ func Parse(args []string) (Command, error) {
 		}
 		return cmd, nil
 
+	case "add":
+		fs := flag.NewFlagSet("add", flag.ContinueOnError)
+		fs.Usage = func() {}
+		all := fs.Bool("all", false, "register with all detected clients")
+		yes := fs.Bool("yes", false, "non-interactive mode")
+		dryRun := fs.Bool("dry-run", false, "show what would change")
+		dir := fs.String("dir", "", "project directory (default: current directory)")
+		if err := fs.Parse(tail); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return cmd, ErrUsage
+			}
+			return cmd, err
+		}
+		cmd.All = *all
+		cmd.Yes = *yes
+		cmd.DryRun = *dryRun
+		cmd.Dir = *dir
+		cmd.Args = fs.Args()
+		return cmd, nil
+
 	default:
-		// Unknown subcommand — pass through for consumer to handle.
+		// Unknown subcommand - pass through for consumer to handle.
 		cmd.Args = tail
 		return cmd, nil
 	}

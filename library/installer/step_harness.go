@@ -4,6 +4,7 @@ package installer
 
 import (
 	"context"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sairaph/mcp-wizard/flow"
@@ -16,6 +17,10 @@ type HarnessStepOptions struct {
 	AllDetected     bool
 	ConflictPolicy  harness.ConflictPolicy
 	ShowUnavailable bool
+	// Scope selects where detection and registration happen. The zero value is
+	// global scope and preserves existing behavior. Set to harness.ProjectScopeDir(dir)
+	// to detect and register in a per-project configuration.
+	Scope harness.Scope
 }
 
 // HarnessState is embedded in consumer state for harness selection.
@@ -24,6 +29,9 @@ type HarnessState struct {
 	Selected   map[harness.ID]bool
 	Cursor     int
 	ShowAll    bool
+	// Scope is the scope used for detection, recorded so downstream steps know
+	// whether registration targets a project or global configuration.
+	Scope harness.Scope
 }
 
 // HarnessStep returns a flow.Step that detects harnesses and lets the user
@@ -51,7 +59,10 @@ type harnessStep[T any] struct {
 func (s *harnessStep[T]) ID() string { return "harnesses" }
 
 func (s *harnessStep[T]) Title(state *T) string {
-	return "AI clients \u2014 which should be able to use this server?"
+	if s.opts.Scope.IsProject() {
+		return fmt.Sprintf("AI clients - register in this project (%s), which should be able to use this server?", s.opts.Scope.Dir)
+	}
+	return "AI clients - which should be able to use this server?"
 }
 
 func (s *harnessStep[T]) Hints(state *T) []struct{ Key, Label string } {
@@ -77,9 +88,13 @@ func (s *harnessStep[T]) Init(state *T) tea.Cmd {
 	if hState == nil {
 		return nil
 	}
+	hState.Scope = s.opts.Scope
 	return tea.Batch(
 		tui.Spinner(),
 		func() tea.Msg {
+			if s.opts.Scope.IsProject() {
+				return detectedMsg{harnesses: s.detector.DetectIn(s.ctx, s.opts.Scope)}
+			}
 			return detectedMsg{harnesses: s.detector.Detect(s.ctx)}
 		},
 	)

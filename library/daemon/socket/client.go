@@ -52,11 +52,11 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 
 	ch := make(chan callResult, 1)
 	go func() {
-		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		if err := c.enc.Encode(req); err != nil {
 			ch <- callResult{err: fmt.Errorf("send request: %w", err)}
 			return
 		}
+		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		var resp rpc.Response
 		if err := c.dec.Decode(&resp); err != nil {
 			ch <- callResult{err: fmt.Errorf("read response: %w", err)}
@@ -91,7 +91,5 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 }
 
 func (c *Client) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	return c.conn.Close()
 }

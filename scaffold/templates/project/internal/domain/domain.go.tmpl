@@ -3,6 +3,7 @@
 package domain
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -19,12 +20,37 @@ func CredentialPath() string {
 	return filepath.Join(home, ".${BinaryName}", "credentials.json")
 }
 
+// ProjectCredentialPath returns the credentials path inside a project directory.
+// Use this with the project-scoped "add" subcommand.
+func ProjectCredentialPath(dir string) string {
+	return filepath.Join(dir, ".${BinaryName}", "credentials.json")
+}
+
 // LoginConfig returns the credential collection configuration.
 // Replace this with your actual auth flow (email+token, OAuth, API key, etc.).
 func LoginConfig(store secret.Store) installer.LoginConfig {
 	return installer.LoginConfig{
 		ID:        "${ServerName}-login",
 		Label:     "${ServerName} account",
+		Skippable: true,
+		Stages: []installer.LoginStage{
+			{
+				Prompt: "your email address",
+				Field: installer.LoginField{
+					Name: "email", Label: "Email",
+				},
+			},
+		},
+		Store: store,
+	}
+}
+
+// ProjectLoginConfig returns a project-scoped credential collection configuration.
+// Credentials are stored via the provided store (built from ProjectCredentialPath).
+func ProjectLoginConfig(store secret.Store, dir string) installer.LoginConfig {
+	return installer.LoginConfig{
+		ID:        "${ServerName}-login-project",
+		Label:     fmt.Sprintf("${ServerName} account (%s)", filepath.Base(dir)),
 		Skippable: true,
 		Stages: []installer.LoginStage{
 			{

@@ -52,6 +52,8 @@ func main() {
 		os.Exit(runInstall(ctx, cmd))
 	case "uninstall":
 		os.Exit(runUninstall(ctx, cmd))
+	case "add":
+		os.Exit(runAdd(ctx, cmd))
 	case "login":
 		os.Exit(runLogin(ctx, cmd))
 	case "doctor":
@@ -63,6 +65,7 @@ func main() {
 			{Name: "mcp", Description: "Run the MCP server (default)"},
 			{Name: "install", Description: "Install and configure AI client integration"},
 			{Name: "uninstall", Description: "Remove AI client integration"},
+			{Name: "add", Description: "Add server to this project's AI client configs"},
 			{Name: "login", Description: "Sign in to ${ServerName}"},
 			{Name: "doctor", Description: "Diagnose installation"},
 			{Name: "update", Description: "Update to the latest version"},
@@ -145,6 +148,77 @@ func runUnattended(ctx context.Context, detector *harness.Detector, credStore se
 	}
 	results := detector.Apply(ctx, ids, harness.Present, harness.ConflictReplace)
 	installer.PrintResults(os.Stdout, results, true, cmd.DryRun)
+	return 0
+}
+
+// --- Add (project-scoped) ---
+
+func runAdd(ctx context.Context, cmd cli.Command) int {
+	dir := cmd.Dir
+	if dir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		dir = cwd
+	}
+
+	exec, err := harness.ResolveExecutable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	detector, err := harness.New(harness.ServerSpec{
+		Name:    "${ServerName}",
+		Command: exec,
+		Args:    []string{"mcp"},
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	scope := harness.ProjectScopeDir(dir)
+	credStore := secret.NewFileStore(domain.ProjectCredentialPath(dir))
+	state := &AppState{}
+
+	steps := []flow.Step[AppState]{
+		installer.HarnessStep(ctx, detector,
+			func(s *AppState) *installer.HarnessState { return &s.Harness },
+			installer.HarnessStepOptions{AllDetected: true, Scope: scope},
+		),
+		installer.LoginStep(ctx, domain.ProjectLoginConfig(credStore, dir),
+			func(s *AppState) *installer.LoginState { return &s.Login },
+		),
+	}
+
+	if tui.IsInteractive() {
+		return tui.Run(ctx, flow.New(steps, state), tui.Options{Title: "${ServerName} project setup"})
+	}
+
+	harnesses := detector.DetectIn(ctx, scope)
+	var ids []harness.ID
+	for _, h := range harnesses {
+		if cmd.All || (h.Selectable() && !h.Configured) {
+			ids = append(ids, h.ID)
+		}
+	}
+	if len(ids) == 0 {
+		installer.PrintNoClients(os.Stdout, "${ServerName}", false)
+		return 0
+	}
+	if cmd.DryRun {
+		changes, _ := detector.PlanResultsIn(ctx, scope, ids, harness.Present, harness.ConflictReplace)
+		// Print planned changes without writing
+		for _, c := range changes {
+			fmt.Printf("  %-22s would %s\n", c.Name, c.Action)
+		}
+	} else {
+		results := detector.ApplyIn(ctx, scope, ids, harness.Present, harness.ConflictReplace)
+		installer.PrintResultsWithScope(os.Stdout, results, scope, true, cmd.DryRun)
+	}
 	return 0
 }
 

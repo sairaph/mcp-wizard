@@ -58,10 +58,15 @@ func (s *Server) Open() error {
 	if !locked {
 		return fmt.Errorf("daemon is already running")
 	}
-	os.Remove(s.socketPath)
+	if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
+		s.flock.Unlock()
+		s.flock = nil
+		return fmt.Errorf("remove stale socket: %w", err)
+	}
 	listener, err := net.Listen("unix", s.socketPath)
 	if err != nil {
 		s.flock.Unlock()
+		s.flock = nil
 		return fmt.Errorf("listen: %w", err)
 	}
 	s.listener = listener
@@ -112,7 +117,9 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 			}
 			// Send error response before closing so the client doesn't hang.
 			errResp := rpc.NewErrorResponse(0, rpc.CodeParse, "invalid request: "+err.Error())
-			enc.Encode(errResp)
+			if err := enc.Encode(errResp); err != nil {
+				return
+			}
 			return
 		}
 		resp := s.dispatch(ctx, req)

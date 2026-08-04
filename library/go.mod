@@ -8,7 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/gofrs/flock v0.13.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
-	github.com/sairaph/detect-harness v0.1.0
+	github.com/sairaph/detect-harness v0.2.0
 	github.com/tiktoken-go/tokenizer v0.8.1
 	golang.org/x/term v0.27.0
 	gopkg.in/yaml.v3 v3.0.1

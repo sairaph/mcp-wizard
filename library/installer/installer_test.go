@@ -205,6 +205,97 @@ func TestHarnessStepTitle(t *testing.T) {
 	}
 }
 
+func TestHarnessStepTitle_project(t *testing.T) {
+	detector, err := harness.New(harness.ServerSpec{Name: "test", Command: "echo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := installer.HarnessStep[int](context.Background(), detector,
+		func(*int) *installer.HarnessState { return nil },
+		installer.HarnessStepOptions{Scope: harness.ProjectScopeDir("/tmp/proj")})
+	title := step.Title(new(int))
+	for _, want := range []string{"AI clients", "project", "/tmp/proj"} {
+		if !strings.Contains(title, want) {
+			t.Errorf("project title %q missing %q", title, want)
+		}
+	}
+}
+
+func TestHarnessStepInit_recordsScope(t *testing.T) {
+	detector, err := harness.New(harness.ServerSpec{Name: "test", Command: "echo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("project", func(t *testing.T) {
+		var st installer.HarnessState
+		step := installer.HarnessStep[int](context.Background(), detector,
+			func(*int) *installer.HarnessState { return &st },
+			installer.HarnessStepOptions{Scope: harness.ProjectScopeDir(t.TempDir())})
+		if cmd := step.Init(new(int)); cmd == nil {
+			t.Fatal("expected non-nil cmd")
+		}
+		if !st.Scope.IsProject() {
+			t.Fatalf("expected HarnessState.Scope project, got %#v", st.Scope)
+		}
+	})
+	t.Run("global", func(t *testing.T) {
+		var st installer.HarnessState
+		step := installer.HarnessStep[int](context.Background(), detector,
+			func(*int) *installer.HarnessState { return &st },
+			installer.HarnessStepOptions{})
+		if cmd := step.Init(new(int)); cmd == nil {
+			t.Fatal("expected non-nil cmd")
+		}
+		if st.Scope.IsProject() {
+			t.Fatalf("expected HarnessState.Scope global, got %#v", st.Scope)
+		}
+	})
+}
+
+func TestPrintResultsWithScope(t *testing.T) {
+	t.Run("project shows dir and path", func(t *testing.T) {
+		results := []harness.Result{
+			{Name: "Claude Code", State: harness.Applied, Path: "/p/.mcp.json", ScopeMode: harness.ScopeProject, ScopeDir: "/p"},
+		}
+		var buf bytes.Buffer
+		installer.PrintResultsWithScope(&buf, results, harness.ProjectScopeDir("/p"), true, false)
+		out := buf.String()
+		for _, want := range []string{"/p", "/p/.mcp.json", "Claude Code", "registered"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("expected output to contain %q, got:\n%s", want, out)
+			}
+		}
+	})
+	t.Run("global omits scope context", func(t *testing.T) {
+		results := []harness.Result{
+			{Name: "Claude Code", State: harness.Applied},
+		}
+		var buf bytes.Buffer
+		installer.PrintResultsWithScope(&buf, results, harness.Scope{}, true, false)
+		out := buf.String()
+		if strings.Contains(out, "Project scope") {
+			t.Errorf("global scope should not print project header, got:\n%s", out)
+		}
+		for _, want := range []string{"Claude Code", "registered"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("expected output to contain %q, got:\n%s", want, out)
+			}
+		}
+	})
+	t.Run("global matches PrintResults", func(t *testing.T) {
+		results := []harness.Result{
+			{Name: "Claude Code", State: harness.Applied},
+			{Name: "Cursor", State: harness.ApplyNoop},
+		}
+		var b1, b2 bytes.Buffer
+		installer.PrintResults(&b1, results, true, false)
+		installer.PrintResultsWithScope(&b2, results, harness.Scope{}, true, false)
+		if b1.String() != b2.String() {
+			t.Errorf("global PrintResultsWithScope differs from PrintResults\nPrintResults:\n%s\nWithScope:\n%s", b1.String(), b2.String())
+		}
+	})
+}
+
 func TestLoginStepID(t *testing.T) {
 	cfg := installer.LoginConfig{ID: "my-login", Label: "My Login"}
 	step := installer.LoginStep[int](context.Background(), cfg, func(*int) *installer.LoginState { return nil })

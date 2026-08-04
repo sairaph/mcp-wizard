@@ -75,7 +75,9 @@ func (s *Server) runHTTP(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		httpServer.Shutdown(shutdownCtx)
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			fmt.Fprintf(os.Stderr, "error shutting down HTTP server: %v\n", err)
+		}
 	}()
 
 	fmt.Fprintf(os.Stderr, "${ServerName} listening on %s (Streamable HTTP)\n", addr)

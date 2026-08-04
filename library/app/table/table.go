@@ -147,10 +147,21 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		case "pgup":
 			m.Viewport.ViewUp()
+			m.Cursor -= m.Viewport.Height
+			if m.Cursor < 0 {
+				m.Cursor = 0
+			}
 			m.render()
 			return nil
 		case "pgdown":
+			if len(m.Rows) == 0 {
+				return nil
+			}
 			m.Viewport.ViewDown()
+			m.Cursor += m.Viewport.Height
+			if m.Cursor >= len(m.Rows) {
+				m.Cursor = len(m.Rows) - 1
+			}
 			m.render()
 			return nil
 		case "enter":

@@ -51,8 +51,13 @@ func errorResult(e Error) *mcp.CallToolResult {
 			}
 			return s
 		}
-		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n  hint: %s\n---\n## Error\n\n%s\n\n%s\n",
-			yamlQuote(e.Code), yamlQuote(e.Message), yamlQuote(e.Hint), e.Message, e.Hint)
+		body := "## Error\n\n" + e.Message
+		if e.Hint != "" {
+			body += "\n\n" + e.Hint
+		}
+		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n  hint: %s\n---\n%s\n",
+			yamlQuote(e.Code), yamlQuote(e.Message), yamlQuote(e.Hint), body)
+		// Note: Fields is omitted in the fallback path (last resort only).
 	}
 
 	return &mcp.CallToolResult{

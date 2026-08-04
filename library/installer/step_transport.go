@@ -31,10 +31,16 @@ type transportStep[T any] struct {
 func (s *transportStep[T]) ID() string { return "transport" }
 
 func (s *transportStep[T]) Title(state *T) string {
+	if s.stateFn == nil {
+		return "Server transport"
+	}
 	return "Server transport — how should AI clients connect?"
 }
 
 func (s *transportStep[T]) Hints(state *T) []struct{ Key, Label string } {
+	if s.stateFn == nil {
+		return nil
+	}
 	ts := s.stateFn(state)
 	if ts == nil {
 		return nil
@@ -52,6 +58,9 @@ func (s *transportStep[T]) Hints(state *T) []struct{ Key, Label string } {
 }
 
 func (s *transportStep[T]) Init(state *T) tea.Cmd {
+	if s.stateFn == nil {
+		return nil
+	}
 	ts := s.stateFn(state)
 	if ts == nil {
 		return nil
@@ -64,6 +73,9 @@ func (s *transportStep[T]) Init(state *T) tea.Cmd {
 }
 
 func (s *transportStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
+	if s.stateFn == nil {
+		return flow.Fail, nil
+	}
 	ts := s.stateFn(state)
 	if ts == nil {
 		return flow.Fail, nil
@@ -122,6 +134,9 @@ func (s *transportStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cm
 }
 
 func (s *transportStep[T]) View(state *T) string {
+	if s.stateFn == nil {
+		return ""
+	}
 	ts := s.stateFn(state)
 	if ts == nil {
 		return ""

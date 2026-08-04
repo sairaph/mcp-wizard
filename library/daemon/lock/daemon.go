@@ -80,6 +80,7 @@ func (inst *Instance) Close() {
 }
 
 // StaleAfter is the duration after which a lock file is considered stale.
+// Used by tests. IsRunning uses flock.TryLock instead of timestamp checks.
 const StaleAfter = 5 * time.Minute
 
 // IsRunning reports whether a daemon is running by trying to acquire the lock.
@@ -103,22 +104,23 @@ func Stop(pidFile, lockFile string) error {
 	if pidFile == "" {
 		return fmt.Errorf("daemon: pidFile is required to stop the daemon")
 	}
-	stopped := false
 	data, err := os.ReadFile(pidFile)
-	if err == nil {
-		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-		if err == nil && pid > 0 {
-			proc, err := os.FindProcess(pid)
-			if err != nil {
-				return fmt.Errorf("find process %d: %w", pid, err)
-			}
-			if err := proc.Signal(os.Interrupt); err == nil {
-				stopped = true
-			}
-		}
+	if err != nil {
+		return fmt.Errorf("daemon: read pid file: %w", err)
 	}
-	if !stopped {
-		return fmt.Errorf("daemon: could not stop process")
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 0 {
+		return fmt.Errorf("daemon: invalid pid in %s: %q", pidFile, strings.TrimSpace(string(data)))
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("daemon: find process %d: %w", pid, err)
+	}
+	if proc == nil {
+		return fmt.Errorf("daemon: process %d not found", pid)
+	}
+	if err := proc.Signal(os.Interrupt); err != nil {
+		return fmt.Errorf("daemon: signal process %d: %w", pid, err)
 	}
 	return nil
 }

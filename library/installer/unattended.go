@@ -13,34 +13,58 @@ type UnattendedRunner interface {
 	Run(ctx context.Context, out, errw io.Writer) int
 }
 
+// formatResultStatus renders the per-result status word used by the PrintResults
+// family. It has no trailing newline.
+func formatResultStatus(r harness.Result, enabling, dryRun bool) string {
+	verb := "registered"
+	if !enabling {
+		verb = "removed"
+	}
+	status := verb
+	switch r.State {
+	case harness.Applied:
+		status = verb
+	case harness.ApplyNoop:
+		status = "already " + verb
+	case harness.ApplyConflict:
+		status = "conflict"
+	case harness.ApplySkipped:
+		status = "skipped: " + r.Reason
+	case harness.ApplyFailed:
+		status = "failed: " + r.Reason
+	}
+	if dryRun && (r.State == harness.Applied || r.State == harness.ApplyNoop) {
+		if enabling {
+			status = "would register"
+		} else {
+			status = "would remove"
+		}
+	}
+	return status
+}
+
 // PrintResults prints a summary of apply results.
 func PrintResults(w io.Writer, results []harness.Result, enabling, dryRun bool) {
 	for _, r := range results {
-		verb := "registered"
-		if !enabling {
-			verb = "removed"
+		fmt.Fprintf(w, "  %-22s %s\n", r.Name, formatResultStatus(r, enabling, dryRun))
+	}
+}
+
+// PrintResultsWithScope prints a summary of apply results with scope context.
+// For project scope it reports the project directory and appends the resolved
+// configuration file path to each result line. For global scope it matches
+// PrintResults output exactly.
+func PrintResultsWithScope(w io.Writer, results []harness.Result, scope harness.Scope, enabling, dryRun bool) {
+	project := scope.IsProject()
+	if project && scope.Dir != "" {
+		fmt.Fprintf(w, "  Project scope: %s\n", scope.Dir)
+	}
+	for _, r := range results {
+		line := fmt.Sprintf("  %-22s %s", r.Name, formatResultStatus(r, enabling, dryRun))
+		if project && r.Path != "" {
+			line += "  " + r.Path
 		}
-		status := verb
-		switch r.State {
-		case harness.Applied:
-			status = verb
-		case harness.ApplyNoop:
-			status = "already " + verb
-		case harness.ApplyConflict:
-			status = "conflict"
-		case harness.ApplySkipped:
-			status = "skipped: " + r.Reason
-		case harness.ApplyFailed:
-			status = "failed: " + r.Reason
-		}
-		if dryRun && (r.State == harness.Applied || r.State == harness.ApplyNoop) {
-			if enabling {
-				status = "would register"
-			} else {
-				status = "would remove"
-			}
-		}
-		fmt.Fprintf(w, "  %-22s %s\n", r.Name, status)
+		fmt.Fprintln(w, line)
 	}
 }
 
