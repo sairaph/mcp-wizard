@@ -100,10 +100,14 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 
 	// Watch for cancellation - close the connection to unblock Decode.
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
 		select {
 		case <-ctx.Done():
 		case <-s.ctx.Done():
+		case <-done:
+			return
 		}
 		conn.Close()
 	}()

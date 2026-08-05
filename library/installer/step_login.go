@@ -220,13 +220,13 @@ func (s *loginStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd) {
 					return flow.Next, nil
 				}
 				return flow.Quit, nil
-			case "esc":
-				if s.config.Skippable {
-					lState.Skipped = true
-					return flow.Next, nil
-				}
-				return flow.Quit, nil
-			case "q", "ctrl+c":
+		case "esc":
+			if s.config.Skippable {
+				lState.Skipped = true
+				return flow.Next, nil
+			}
+			return flow.Back, nil
+		case "q", "ctrl+c":
 				return flow.Quit, nil
 			}
 			return flow.Continue, nil
