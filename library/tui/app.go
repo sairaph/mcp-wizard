@@ -17,14 +17,7 @@ func Run[T any](ctx context.Context, f *flow.Flow[T], opts Options) int {
 	if f == nil {
 		return 1
 	}
-	theme := opts.Theme
-	// Only default when no theme fields are set - partial overrides are respected.
-	if theme == (Theme{}) {
-		theme = DefaultTheme
-	}
-	if opts.Title != "" {
-		theme.Copy.Title = opts.Title
-	}
+	// opts.Theme and opts.Title are reserved for future use.
 
 	model := f.Model()
 	program := tea.NewProgram(model, tea.WithContext(ctx),

@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/gofrs/flock"
 	"github.com/sairaph/mcp-wizard/daemon/rpc"
@@ -99,31 +98,24 @@ func (s *Server) Serve(ctx context.Context) error {
 func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	defer s.wg.Done()
 	defer conn.Close()
+
+	// Watch for cancellation - close the connection to unblock Decode.
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-s.ctx.Done():
+		}
+		conn.Close()
+	}()
+
 	dec := json.NewDecoder(conn)
 	enc := json.NewEncoder(conn)
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-s.ctx.Done():
-			return
-		default:
-		}
-		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 		var req rpc.Request
 		if err := dec.Decode(&req); err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				continue
-			}
-			// Send error response before closing so the client doesn't hang.
-			errResp := rpc.NewErrorResponse(0, rpc.CodeParse, "invalid request: "+err.Error())
-			if err := enc.Encode(errResp); err != nil {
-				return
-			}
-			return
+			return // connection closed or error
 		}
 		resp := s.dispatch(ctx, req)
-		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err := enc.Encode(resp); err != nil {
 			return
 		}

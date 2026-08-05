@@ -52,6 +52,9 @@ func (f *Flow[T]) Retreat() bool {
 // JumpTo moves to the step with the given ID. Returns false if not found.
 func (f *Flow[T]) JumpTo(id string) bool {
 	for i, step := range f.steps {
+		if step == nil {
+			continue
+		}
 		if step.ID() == id {
 			f.current = i
 			return true
