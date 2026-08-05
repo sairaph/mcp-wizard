@@ -137,7 +137,7 @@ func (s *Server) dispatch(ctx context.Context, req rpc.Request) rpc.Response {
 	if !ok {
 		return rpc.NewErrorResponse(req.ID, rpc.CodeMethod, "unknown method: "+req.Method)
 	}
-	result, err := handler(ctx, req.Params)
+	result, err := safeCall(ctx, handler, req.Params)
 	if err != nil {
 		return rpc.NewErrorResponse(req.ID, rpc.CodeInternal, err.Error())
 	}
@@ -146,6 +146,15 @@ func (s *Server) dispatch(ctx context.Context, req rpc.Request) rpc.Response {
 		return rpc.NewErrorResponse(req.ID, rpc.CodeInternal, rpcErr.Error())
 	}
 	return resp
+}
+
+func safeCall(ctx context.Context, handler Handler, params json.RawMessage) (result any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("handler panic: %v", r)
+		}
+	}()
+	return handler(ctx, params)
 }
 
 func (s *Server) cleanup() {

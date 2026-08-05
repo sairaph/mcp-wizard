@@ -137,8 +137,8 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(tea.QuitMsg); ok {
 		directive, cmd := m.step.Update(msg, m.flow.state)
 		if directive == Fail {
-			if base := m.flow.getBaseState(); base != nil {
-				base.Failure = fmt.Errorf("flow: step %q returned Fail on quit", m.step.ID())
+		if base := m.flow.getBaseState(); base != nil && base.Failure == nil {
+			base.Failure = fmt.Errorf("flow: step %q returned Fail on quit", m.step.ID())
 			} else {
 				m.flow.flowFailure = fmt.Errorf("flow: step %q returned Fail on quit", m.step.ID())
 			}

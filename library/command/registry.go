@@ -50,14 +50,18 @@ func (r *Registry) Register(h Handler) {
 	if h.Run == nil {
 		panic("command: Register requires a non-nil Run function")
 	}
+	// Validate all names up front before any insertion.
 	if _, exists := r.handlers[h.Name]; exists {
 		panic(fmt.Sprintf("command: %q is already registered", h.Name))
 	}
-	r.handlers[h.Name] = &h
 	for _, alias := range h.Aliases {
 		if _, exists := r.handlers[alias]; exists {
 			panic(fmt.Sprintf("command: alias %q is already registered", alias))
 		}
+	}
+	// All clear - insert atomically.
+	r.handlers[h.Name] = &h
+	for _, alias := range h.Aliases {
 		r.handlers[alias] = &h
 	}
 }

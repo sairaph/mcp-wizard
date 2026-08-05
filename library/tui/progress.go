@@ -14,7 +14,7 @@ func StepIndicator(current, total int, names []string) string {
 	if current >= 0 && current < len(names) {
 		name = names[current]
 	}
-	return fmt.Sprintf("Step %d of %d \u2014 %s", current+1, total, name)
+	return fmt.Sprintf("Step %d of %d - %s", current+1, total, name)
 }
 
 func ProgressBar(done, total, width int) string {

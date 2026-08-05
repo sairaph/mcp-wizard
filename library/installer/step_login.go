@@ -75,7 +75,7 @@ func (s *loginStep[T]) Title(state *T) string {
 	if lState.Stage >= 0 && lState.Stage < len(s.config.Stages) {
 		stage := s.config.Stages[lState.Stage]
 		if stage.Prompt != "" {
-			return s.config.Label + " \u2014 " + stage.Prompt
+			return s.config.Label + " - " + stage.Prompt
 		}
 	}
 	return s.config.Label
