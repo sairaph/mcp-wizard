@@ -211,6 +211,7 @@ func (m *flowModel[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		nextStep := ""
 		if base != nil {
 			nextStep = base.NextStep
+			base.NextStep = "" // Clear after reading
 		}
 		if nextStep == "" {
 			if base != nil {

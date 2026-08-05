@@ -58,6 +58,9 @@ func errorResult(e Error) *mcp.CallToolResult {
 		text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: %s\n  hint: %s\n---\n%s\n",
 			yamlQuote(e.Code), yamlQuote(e.Message), yamlQuote(e.Hint), body)
 		// Note: Fields is omitted in the fallback path (last resort only).
+		if len(text) > MaxBytes {
+			text = fmt.Sprintf("---\nerror:\n  code: %s\n  message: output truncated\n---\n## Error\n\nOutput exceeded maximum size.\n", e.Code)
+		}
 	}
 
 	return &mcp.CallToolResult{
