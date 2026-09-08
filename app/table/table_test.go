@@ -228,9 +228,16 @@ func TestPageUpDown(t *testing.T) {
 		{"A"}, {"B"}, {"C"},
 	})
 
-	// pgup should not panic on small data
-	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	// Paging on data smaller than the viewport clamps to the last and first
+	// rows instead of running past them.
 	m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	if m.Cursor != len(m.Rows)-1 {
+		t.Fatalf("pgdown on small data: Cursor = %d, want %d", m.Cursor, len(m.Rows)-1)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	if m.Cursor != 0 {
+		t.Fatalf("pgup on small data: Cursor = %d, want 0", m.Cursor)
+	}
 }
 
 func TestSortIndicatorInView(t *testing.T) {

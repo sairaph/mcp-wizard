@@ -46,13 +46,15 @@ func TestErrAlreadyRunning(t *testing.T) {
 	}
 }
 
-func TestHandlerRegistration(t *testing.T) {
+func TestHandlerRegistrationRejectsNil(t *testing.T) {
 	dir := t.TempDir()
 	s := socket.New(dir, "test")
-	s.Handle("ping", func(ctx context.Context, params json.RawMessage) (any, error) {
-		return "pong", nil
-	})
-	// No error expected; registration just stores the handler
+	defer func() {
+		if recover() == nil {
+			t.Fatal("Handle(nil) must panic")
+		}
+	}()
+	s.Handle("x", nil)
 }
 
 func TestClientServerRoundTrip(t *testing.T) {
@@ -257,10 +259,15 @@ func TestCloseFromHandlerDoesNotDeadlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	// The response may or may not make it out before the connection is
-	// closed; either way the server must wind down.
+	// The reply to the shutdown call is delivered before the connection is
+	// closed, and the server winds down afterwards.
 	var result string
-	_ = c.Call(context.Background(), "shutdown", nil, &result)
+	if err := c.Call(context.Background(), "shutdown", nil, &result); err != nil {
+		t.Fatalf("shutdown call: %v", err)
+	}
+	if result != "bye" {
+		t.Fatalf("shutdown reply = %q, want bye", result)
+	}
 
 	select {
 	case err := <-served:

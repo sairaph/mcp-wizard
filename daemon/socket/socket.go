@@ -138,7 +138,14 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	hctx, hcancel := context.WithCancel(ctx)
 	defer hcancel()
 
-	// Watch for cancellation - close the connection to unblock Decode.
+	// Watch for cancellation - close the connection to unblock Decode. If a
+	// request is being handled at that moment (for example a "shutdown" RPC
+	// that called Close), let its reply go out first and close afterwards.
+	var (
+		mu             sync.Mutex
+		busy           bool
+		closeRequested bool
+	)
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -149,6 +156,13 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 			return
 		}
 		hcancel()
+		mu.Lock()
+		if busy {
+			closeRequested = true
+			mu.Unlock()
+			return
+		}
+		mu.Unlock()
 		conn.Close()
 	}()
 
@@ -159,8 +173,16 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		if err := dec.Decode(&req); err != nil {
 			return // connection closed or error
 		}
+		mu.Lock()
+		busy = true
+		mu.Unlock()
 		resp := s.dispatch(hctx, req)
-		if err := enc.Encode(resp); err != nil {
+		err := enc.Encode(resp)
+		mu.Lock()
+		busy = false
+		stop := closeRequested
+		mu.Unlock()
+		if err != nil || stop {
 			return
 		}
 	}

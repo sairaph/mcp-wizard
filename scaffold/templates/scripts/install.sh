@@ -3,7 +3,8 @@ set -e
 OWNER="${Owner}"
 REPO="${BinaryName}"
 BIN="${BinaryName}"
-CONFIGURE_ARGS=""
+# Extra flags for the configure step, e.g. CONFIGURE_ARGS="--yes --all" sh install.sh
+CONFIGURE_ARGS="${CONFIGURE_ARGS:-}"
 
 # --- detect OS / arch ------------------------------------------------------
 OS="$(uname -s)"

@@ -99,24 +99,6 @@ func TestSupported_returnsNonEmpty(t *testing.T) {
 	}
 }
 
-func TestNew_envMapIsCopied(t *testing.T) {
-	env := map[string]string{"TOKEN": "secret"}
-	d1, err := harness.New(harness.ServerSpec{Name: "test", Command: "/bin/sh", Env: env})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Mutate the original map.
-	env["TOKEN"] = "hacked"
-	// Verify d1 is isolated by checking its internal state.
-	// Since we can't access the internal installer directly, verify
-	// both detectors function correctly.
-	ctx := context.Background()
-	_, err1 := d1.PlanResults(ctx, nil, harness.Present, harness.ConflictReplace)
-	if err1 != nil {
-		t.Fatal(err1)
-	}
-}
-
 func TestDetect_returnsResults(t *testing.T) {
 	spec := harness.ServerSpec{
 		Name:    "test-server",

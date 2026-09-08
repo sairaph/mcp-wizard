@@ -2,7 +2,6 @@ package update
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,7 +13,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
+
+	"github.com/sairaph/mcp-wizard/internal/tmpname"
 )
 
 // Options controls the self-update behaviour.
@@ -310,6 +310,9 @@ func lookupChecksum(manifest, assetName string) (string, bool) {
 // the swap fails. Removing it afterwards fails while that executable is
 // still running (the usual self-update case), so a "<target>.old-xxxxxxxx"
 // file can remain until RemoveStaleBinaries is called on a later start.
+// rename is os.Rename, replaceable in tests to simulate cross-device moves.
+var rename = os.Rename
+
 func swapFile(source, target string) error {
 	dir := filepath.Dir(target)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -319,8 +322,8 @@ func swapFile(source, target string) error {
 	var oldTarget string
 	if runtime.GOOS == "windows" {
 		if _, err := os.Stat(target); err == nil {
-			oldTarget = target + ".old-" + randString(8)
-			if err := os.Rename(target, oldTarget); err != nil {
+			oldTarget = target + ".old-" + tmpname.Suffix(8)
+			if err := rename(target, oldTarget); err != nil {
 				return fmt.Errorf("move aside old binary: %w", err)
 			}
 		}
@@ -331,14 +334,14 @@ func swapFile(source, target string) error {
 		}
 	}
 
-	err := os.Rename(source, target)
+	err := rename(source, target)
 	if err != nil && isCrossDevice(err) {
-		staged := target + ".staging-" + randString(8)
+		staged := target + ".staging-" + tmpname.Suffix(8)
 		if copyErr := copyFile(source, staged); copyErr != nil {
 			restore()
 			return fmt.Errorf("copy binary across devices: %w", copyErr)
 		}
-		if err = os.Rename(staged, target); err != nil {
+		if err = rename(staged, target); err != nil {
 			_ = os.Remove(staged)
 			restore()
 			return fmt.Errorf("rename staged binary: %w", err)
@@ -397,18 +400,4 @@ func copyFile(src, dst string) error {
 	}
 	cleanup = false
 	return nil
-}
-
-func randString(n int) string {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		for i := range b {
-			b[i] = byte(time.Now().UnixNano() >> uint(i*8%64))
-		}
-	}
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	for i := range b {
-		b[i] = letters[int(b[i])%len(letters)]
-	}
-	return string(b)
 }

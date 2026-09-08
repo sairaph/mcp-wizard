@@ -2,26 +2,14 @@ package secret
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-)
 
-func randString(n int) string {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		// If crypto/rand.Read fails, use whatever bytes we have (they may be zero).
-		// O_EXCL on OpenFile prevents filename collisions regardless.
-	}
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	for i := range b {
-		b[i] = letters[int(b[i])%len(letters)]
-	}
-	return string(b)
-}
+	"github.com/sairaph/mcp-wizard/internal/tmpname"
+)
 
 // Store is the credential persistence interface.
 type Store interface {
@@ -68,7 +56,7 @@ func (s *FileStore) Save(ctx context.Context, sess *Session) error {
 	}
 
 	// Atomic write: write to temp file, rename into place.
-	tmpPath := filepath.Join(dir, ".credentials-"+randString(8)+".tmp")
+	tmpPath := filepath.Join(dir, ".credentials-"+tmpname.Suffix(8)+".tmp")
 	tmp, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("create temp credential file: %w", err)

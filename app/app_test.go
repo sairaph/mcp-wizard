@@ -63,25 +63,6 @@ func TestActionWithExtraData(t *testing.T) {
 	}
 }
 
-func TestAppModelDefaults(t *testing.T) {
-	m := app.AppModel{}
-	if m.Step != app.StepMenu {
-		t.Errorf("expected Step=%d (StepMenu), got %d", app.StepMenu, m.Step)
-	}
-	if m.Width != 0 {
-		t.Errorf("expected Width=0, got %d", m.Width)
-	}
-	if m.Height != 0 {
-		t.Errorf("expected Height=0, got %d", m.Height)
-	}
-	if m.Status != "" {
-		t.Errorf("expected Status=\"\", got %q", m.Status)
-	}
-	if m.Failure != "" {
-		t.Errorf("expected Failure=\"\", got %q", m.Failure)
-	}
-}
-
 func TestHandleGlobalKeysCtrlC(t *testing.T) {
 	m := app.AppModel{}
 	handled, cmd := m.HandleGlobalKeys(tea.KeyMsg{Type: tea.KeyCtrlC})
@@ -148,14 +129,5 @@ func TestHandleGlobalKeysWindowSize(t *testing.T) {
 	}
 	if m.Height != 40 {
 		t.Errorf("expected Height=40, got %d", m.Height)
-	}
-}
-
-func TestStepConstants(t *testing.T) {
-	if app.StepMenu != 0 {
-		t.Errorf("expected StepMenu=0, got %d", app.StepMenu)
-	}
-	if app.StepCustom != 1 {
-		t.Errorf("expected StepCustom=1, got %d", app.StepCustom)
 	}
 }

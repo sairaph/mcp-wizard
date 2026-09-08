@@ -360,6 +360,9 @@ func TestClassifyNilReturnsEmptyError(t *testing.T) {
 	}
 }
 
+// TestErrorCodeConstants pins the wire values documented in TOOLS.md; tools
+// and their consumers match on these strings, so renaming a constant must not
+// silently change what is emitted.
 func TestErrorCodeConstants(t *testing.T) {
 	cases := map[string]string{
 		render.CodeNotFound:     "not_found",

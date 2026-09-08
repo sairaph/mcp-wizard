@@ -1,8 +1,10 @@
 package proxy_test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -451,5 +453,75 @@ func TestBridgeDeliversResponseAfterClientHalfClose(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("bridge did not exit after draining")
+	}
+}
+
+func TestBridgeSessionIDAndLargeMessages(t *testing.T) {
+	rs := newRemoteServer(t, "tok")
+	clientT, _, cancel := startBridge(t, proxy.Config{URL: rs.srv.URL, Headers: map[string]string{"Authorization": "Bearer tok", "X-Record": "1"}})
+	defer cancel()
+	session := connect(t, clientT)
+	defer session.Close()
+
+	big := strings.Repeat("x", 600<<10) // larger than any pipe buffer
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "echo", Arguments: map[string]any{"text": big}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := res.Content[0].(*mcp.TextContent).Text; len(got) != len("echo: ")+len(big) {
+		t.Fatalf("large payload truncated: %d bytes", len(got))
+	}
+
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	last := rs.calls[len(rs.calls)-1]
+	if last.Get("Mcp-Session-Id") == "" {
+		t.Fatalf("later requests must carry the session id, headers: %v", last)
+	}
+}
+
+// TestBridgeStringRequestIDs drives the bridge with raw JSON using string
+// request ids, which mcp.Client never produces but other clients do.
+func TestBridgeStringRequestIDs(t *testing.T) {
+	rs := newRemoteServer(t, "tok")
+	toBridgeR, toBridgeW := io.Pipe()
+	fromBridgeR, fromBridgeW := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		done <- proxy.Run(context.Background(), proxy.Config{
+			URL:     rs.srv.URL,
+			Headers: map[string]string{"Authorization": "Bearer tok"},
+			Local:   &mcp.IOTransport{Reader: toBridgeR, Writer: fromBridgeW},
+		})
+	}()
+	reader := bufio.NewReader(fromBridgeR)
+	send := func(line string) {
+		if _, err := io.WriteString(toBridgeW, line+"\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	recv := func() map[string]any {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			t.Fatalf("bad json %q: %v", line, err)
+		}
+		return m
+	}
+	send(`{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}`)
+	if m := recv(); m["id"] != "init-1" || m["result"] == nil {
+		t.Fatalf("initialize reply = %v", m)
+	}
+	send(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	send(`{"jsonrpc":"2.0","id":"call-a","method":"tools/call","params":{"name":"echo","arguments":{"text":"s"}}}`)
+	if m := recv(); m["id"] != "call-a" || m["result"] == nil {
+		t.Fatalf("call reply = %v", m)
+	}
+	toBridgeW.Close()
+	if err := <-done; err != nil {
+		t.Fatalf("bridge returned %v", err)
 	}
 }

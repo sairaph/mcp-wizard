@@ -181,6 +181,44 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 }
 
+// standardHeadersVersion is the first protocol version that requires the
+// Mcp-Method and Mcp-Name request headers.
+const standardHeadersVersion = "2026-06-30"
+
+// setStandardHeaders derives Mcp-Method and Mcp-Name from the JSON-RPC
+// request body. Requests without a readable body are left alone.
+func setStandardHeaders(req *http.Request) {
+	if req.GetBody == nil {
+		return
+	}
+	body, err := req.GetBody()
+	if err != nil {
+		return
+	}
+	defer body.Close()
+	var msg struct {
+		Method string `json:"method"`
+		Params struct {
+			Name string `json:"name"`
+			URI  string `json:"uri"`
+		} `json:"params"`
+	}
+	if err := json.NewDecoder(io.LimitReader(body, 1<<20)).Decode(&msg); err != nil || msg.Method == "" {
+		return
+	}
+	req.Header.Set("Mcp-Method", msg.Method)
+	switch msg.Method {
+	case "tools/call", "prompts/get":
+		if msg.Params.Name != "" {
+			req.Header.Set("Mcp-Name", msg.Params.Name)
+		}
+	case "resources/read":
+		if msg.Params.URI != "" {
+			req.Header.Set("Mcp-Name", msg.Params.URI)
+		}
+	}
+}
+
 // isHangup reports whether a local read error means the client went away
 // normally.
 func isHangup(err error) bool {
@@ -340,14 +378,18 @@ func (i *injector) RoundTrip(req *http.Request) (*http.Response, error) {
 		req.Header.Set(k, v)
 	}
 	i.mu.RLock()
-	// Protocol versions from 2026-06-30 on also require Mcp-Method and
-	// Mcp-Name headers derived from the body; the SDK sets those only when
-	// the version header is present before its own header pass, which a
-	// bridge cannot arrange. go-sdk v1.6.1 negotiates at most 2025-11-25.
-	if i.version != "" && req.Header.Get("MCP-Protocol-Version") == "" {
-		req.Header.Set("MCP-Protocol-Version", i.version)
-	}
+	version := i.version
 	i.mu.RUnlock()
+	if version != "" && req.Header.Get("MCP-Protocol-Version") == "" {
+		req.Header.Set("MCP-Protocol-Version", version)
+	}
+	// Protocol versions from 2026-06-30 on also require Mcp-Method and
+	// Mcp-Name headers derived from the body. The SDK adds them only when
+	// the version header is present before its own header pass, which a
+	// bridge cannot arrange, so derive them here.
+	if version >= standardHeadersVersion && req.Method == http.MethodPost && req.Header.Get("Mcp-Method") == "" {
+		setStandardHeaders(req)
+	}
 
 	if req.Method == http.MethodDelete {
 		// The transport's Close sends the session DELETE on a detached
