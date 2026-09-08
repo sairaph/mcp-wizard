@@ -6,9 +6,16 @@ import (
 )
 
 // Fence renders content inside a tilde-fenced block, growing the fence
-// past any content tildes. language is emitted as the info-string.
+// past any content tildes. language is emitted as the info-string; it is
+// reduced to its first word with leading tildes removed, since anything
+// else would merge into the opening fence or break out of it.
 func Fence(content, language string) string {
 	content = strings.ReplaceAll(content, "\r\n", "\n")
+	if fields := strings.Fields(language); len(fields) > 0 {
+		language = strings.TrimLeft(fields[0], "~")
+	} else {
+		language = ""
+	}
 	longest := 2
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimLeft(line, " \t")

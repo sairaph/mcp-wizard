@@ -155,3 +155,26 @@ func TestMustParse_Panics(t *testing.T) {
 	}()
 	MustParse("invalid")
 }
+
+func FuzzParse(f *testing.F) {
+	for _, s := range []string{"1.2.3", "v0.1.0", "1.2.3-rc.1+build", "", "1.2", "a.b.c", "1.2.3-", "01.2.3", "1.2.3+", "-1.2.3"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, in string) {
+		v, err := Parse(in)
+		if err != nil {
+			return
+		}
+		// A parsed version must round-trip through String and compare equal.
+		again, err := Parse(v.String())
+		if err != nil {
+			t.Fatalf("String() of %q = %q does not parse: %v", in, v.String(), err)
+		}
+		if again.Compare(v) != 0 {
+			t.Fatalf("round trip changed ordering: %q -> %q", in, v.String())
+		}
+		if v.Major < 0 || v.Minor < 0 || v.Patch < 0 {
+			t.Fatalf("negative component from %q", in)
+		}
+	})
+}

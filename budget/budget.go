@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"sync"
 	"unicode/utf8"
 
@@ -128,9 +127,8 @@ func Truncate(text string, tokenLimit, byteLimit int) (prefix string, tokens int
 	probeLimit = min(probeLimit, len(bounded))
 	candidate := validPrefix(bounded, probeLimit)
 	var ids []uint
-	var pieces []string
 	for {
-		ids, pieces, err = enc.Encode(candidate)
+		ids, _, err = enc.Encode(candidate)
 		if err != nil {
 			return "", 0, false, err
 		}
@@ -145,8 +143,32 @@ func Truncate(text string, tokenLimit, byteLimit int) (prefix string, tokens int
 	}
 
 	truncated = true
-	safeLimit := min(tokenLimit, len(pieces))
-	prefix = validPrefix(strings.Join(pieces[:safeLimit], ""), len(candidate))
+	// Find the longest valid prefix of candidate within the token budget by
+	// bisecting on byte length. Joining the encoder's pieces would not do:
+	// byte-fallback tokens for control or invalid bytes do not round-trip to
+	// the original text, so the result would not be a prefix.
+	lo, hi := 0, len(candidate)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		p := validPrefix(candidate, mid)
+		n, err := enc.Count(p)
+		if err != nil {
+			return "", 0, false, err
+		}
+		if n <= tokenLimit {
+			lo = len(p)
+			if len(p) < mid {
+				// validPrefix backed off a partial rune; keep bisecting above it.
+				lo = mid
+				if lo > hi {
+					lo = hi
+				}
+			}
+		} else {
+			hi = mid - 1
+		}
+	}
+	prefix = validPrefix(candidate, lo)
 	tokens, err = enc.Count(prefix)
 	if err != nil {
 		return "", 0, false, err

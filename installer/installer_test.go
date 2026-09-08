@@ -463,3 +463,22 @@ func TestPrintChanges(t *testing.T) {
 		}
 	}
 }
+
+func TestVisibleIndicesIncludesInstalledProjectHarness(t *testing.T) {
+	hs := []harness.Harness{
+		{ID: "a", ScopeMode: harness.ScopeProject, State: harness.NotDetected, Installed: true},
+		{ID: "b", ScopeMode: harness.ScopeProject, State: harness.NotDetected},
+		{ID: "c", ScopeMode: harness.ScopeProject, State: harness.Unavailable},
+		{ID: "d", ScopeMode: harness.ScopeProject, State: harness.NotDetected, Configured: true},
+	}
+	got := installer.VisibleIndices(hs, false)
+	if len(got) != 2 || got[0] != 0 || got[1] != 3 {
+		t.Fatalf("visible = %v, want [0 3] (installed and configured)", got)
+	}
+	if all := installer.VisibleIndices(hs, true); len(all) != 4 {
+		t.Fatalf("showAll = %v", all)
+	}
+	if !hs[0].Selectable() || !hs[1].Selectable() || hs[2].Selectable() {
+		t.Fatal("project-scope selectability: absent must be selectable, unavailable must not")
+	}
+}

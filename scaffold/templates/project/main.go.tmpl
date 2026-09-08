@@ -182,17 +182,20 @@ func selectIDs(harnesses []harness.Harness, cmd cli.Command) (ids []harness.ID, 
 		}
 		return ids, ""
 	}
-	selectable := 0
+	// Default: installed clients that are not configured yet. --all: every
+	// installed or configured client (in project scope that means every
+	// client found on this machine gets a project entry).
+	candidates := 0
 	for _, h := range harnesses {
-		if !h.Selectable() {
+		if !h.Selectable() || !h.Relevant() {
 			continue
 		}
-		selectable++
+		candidates++
 		if cmd.All || !h.Configured {
 			ids = append(ids, h.ID)
 		}
 	}
-	if len(ids) == 0 && selectable > 0 {
+	if len(ids) == 0 && candidates > 0 {
 		return nil, "every detected client is already configured (use --all to re-register)"
 	}
 	return ids, ""

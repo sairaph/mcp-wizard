@@ -408,3 +408,32 @@ func TestClassifySkipsTargetsThatAreNotErrors(t *testing.T) {
 		t.Fatalf("non-error targets must be skipped, got %q", e.Code)
 	}
 }
+
+func FuzzFence(f *testing.F) {
+	for _, s := range []string{"", "~~~", "text\n~~~~\nmore", "\r\n", "~", "no fence"} {
+		f.Add(s, "text")
+	}
+	f.Fuzz(func(t *testing.T, content, lang string) {
+		out := render.Fence(content, lang)
+		lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+		if len(lines) < 2 {
+			t.Fatalf("fence too short: %q", out)
+		}
+		open, closing := lines[0], lines[len(lines)-1]
+		fence := open[:len(open)-len(strings.TrimLeft(open, "~"))]
+		info := open[len(fence):]
+		if len(fence) < 3 || closing != fence {
+			t.Fatalf("open/close fence mismatch: %q / %q in %q", open, closing, out)
+		}
+		// The info string is a single word that cannot merge into the fence.
+		if strings.ContainsAny(info, " \t\n~") && strings.IndexAny(info, " \t\n") == 0 || strings.HasPrefix(info, "~") || strings.ContainsAny(info, "\n\r") {
+			t.Fatalf("unsafe info string %q from lang %q", info, lang)
+		}
+		// No content line may contain a run of tildes as long as the fence.
+		for _, l := range lines[1 : len(lines)-1] {
+			if strings.HasPrefix(strings.TrimLeft(l, " \t"), fence) {
+				t.Fatalf("content line %q would close fence %q", l, fence)
+			}
+		}
+	})
+}

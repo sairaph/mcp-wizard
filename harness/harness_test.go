@@ -356,3 +356,62 @@ func TestConvertProjectScope_nilPropagatesThroughDetect(t *testing.T) {
 		t.Fatal("expected at least one Detect result with nil Project (convertProjectScope(nil) safety)")
 	}
 }
+
+func TestProjectScopeSelectableAndInstalled(t *testing.T) {
+	d, err := harness.New(harness.ServerSpec{Name: "t", Command: "/bin/true"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	results := d.DetectIn(context.Background(), harness.ProjectScopeDir(dir))
+	if len(results) == 0 {
+		t.Fatal("no results")
+	}
+	global := map[harness.ID]bool{}
+	for _, g := range d.Detect(context.Background()) {
+		global[g.ID] = g.State == harness.Detected
+	}
+	sawSelectable := false
+	for _, h := range results {
+		if h.ScopeMode != harness.ScopeProject {
+			t.Fatalf("%s: ScopeMode = %q, want project", h.ID, h.ScopeMode)
+		}
+		if h.Installed != global[h.ID] {
+			t.Fatalf("%s: Installed=%v but global detection says %v", h.ID, h.Installed, global[h.ID])
+		}
+		switch h.State {
+		case harness.Unavailable:
+			if h.Selectable() {
+				t.Fatalf("%s is unavailable in project scope but selectable", h.ID)
+			}
+		default:
+			// A fresh project has no config files, yet the harness must be
+			// selectable so the file can be created.
+			if !h.Selectable() {
+				t.Fatalf("%s: state %q should be selectable in project scope", h.ID, h.State)
+			}
+			sawSelectable = true
+			if h.Configured {
+				t.Fatalf("%s reported configured in an empty project", h.ID)
+			}
+			if h.Installed && h.StatusText() != "installed" {
+				t.Fatalf("%s: status %q, want installed", h.ID, h.StatusText())
+			}
+		}
+	}
+	if !sawSelectable {
+		t.Fatal("expected at least one selectable harness in project scope")
+	}
+}
+
+func TestGlobalScopeInstalledEqualsDetected(t *testing.T) {
+	d, err := harness.New(harness.ServerSpec{Name: "t", Command: "/bin/true"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range d.Detect(context.Background()) {
+		if h.Installed != (h.State == harness.Detected) {
+			t.Fatalf("%s: Installed=%v State=%s", h.ID, h.Installed, h.State)
+		}
+	}
+}

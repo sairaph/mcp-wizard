@@ -121,15 +121,47 @@ type Harness struct {
 	Project   *ProjectScopeInfo `json:"project,omitempty"`
 	ScopeMode ScopeMode         `json:"scopeMode,omitempty"`
 	ScopeDir  string            `json:"scopeDir,omitempty"`
+	// Installed reports whether the client itself was found on this machine.
+	// In global scope it equals State == Detected. In project scope State
+	// describes the directory-local config file, which is usually absent in
+	// a fresh project, so Installed is what tells the wizard which clients
+	// are worth offering.
+	Installed bool `json:"installed"`
 }
 
-// Selectable reports whether a harness can be registered.
+// Selectable reports whether a harness can be registered. In global scope
+// that needs the client to be detected (or already configured); in project
+// scope any harness that supports project configuration qualifies, because
+// the file is created on demand.
 func (h Harness) Selectable() bool {
+	if h.ScopeMode == ScopeProject {
+		return h.State != Unavailable && h.State != ""
+	}
 	return h.State == Detected || h.Configured
+}
+
+// Relevant reports whether a harness belongs in the default view: it is
+// installed, already configured, or has a config present.
+func (h Harness) Relevant() bool {
+	return h.Installed || h.Configured || h.State == Detected
 }
 
 // StatusText returns a human-readable status line.
 func (h Harness) StatusText() string {
+	if h.ScopeMode == ScopeProject {
+		switch {
+		case h.Configured:
+			return "configured in project"
+		case h.State == Unavailable:
+			return h.Reason
+		case h.State == Detected:
+			return "project config present"
+		case h.Installed:
+			return "installed"
+		default:
+			return "not installed"
+		}
+	}
 	switch h.State {
 	case Detected:
 		if h.Configured {

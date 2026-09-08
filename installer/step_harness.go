@@ -114,7 +114,10 @@ func (s *harnessStep[T]) Update(msg tea.Msg, state *T) (flow.Directive, tea.Cmd)
 		hState.Detections = m.harnesses
 		hState.Selected = make(map[harness.ID]bool)
 		for _, h := range m.harnesses {
-			if h.Configured || (s.opts.AllDetected && h.Selectable()) {
+			// Pre-select installed clients; in project scope every harness
+			// with project support is selectable, but only the ones the
+			// user actually has should start checked.
+			if h.Configured || (s.opts.AllDetected && h.Selectable() && h.Relevant()) {
 				hState.Selected[h.ID] = true
 			}
 		}
@@ -251,11 +254,12 @@ func (s *harnessStep[T]) View(state *T) string {
 // --- helpers ---
 
 // VisibleIndices returns the indices of harnesses shown in the list:
-// detected or configured ones, or all of them when showAll is set.
+// installed, configured or config-present ones, or all of them when showAll
+// is set.
 func VisibleIndices(harnesses []harness.Harness, showAll bool) []int {
 	var indices []int
 	for i, h := range harnesses {
-		if h.State == harness.Detected || h.Configured || showAll {
+		if h.Relevant() || showAll {
 			indices = append(indices, i)
 		}
 	}

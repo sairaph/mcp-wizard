@@ -43,9 +43,10 @@ func (d *Detector) Detect(ctx context.Context) []Harness {
 }
 
 // DetectIn probes all harnesses for the supplied scope and returns Harness
-// values with the Configured flag set, computed by running a scope-aware Plan
-// and checking for a no-op change. Results are sorted with selectable
-// harnesses first, then by name.
+// values with the Configured and Installed flags set: Configured by running a
+// scope-aware Plan and checking for a no-op change, Installed from global
+// detection. Results are sorted with relevant harnesses (installed,
+// configured, or with a config present) first, then by name.
 func (d *Detector) DetectIn(ctx context.Context, scope Scope) []Harness {
 	if d == nil || d.installer == nil {
 		return nil
@@ -60,6 +61,24 @@ func (d *Detector) DetectIn(ctx context.Context, scope Scope) []Harness {
 	for _, r := range raw {
 		results = append(results, convertDetection(r))
 		ids = append(ids, r.ID)
+	}
+
+	// Installed comes from global detection: in project scope the scoped
+	// State only says whether the project file exists.
+	if scope.IsProject() {
+		installed := make(map[ID]bool)
+		for _, g := range d.installer.Detect(ctx) {
+			if g.State == detectharness.Detected {
+				installed[ID(g.ID)] = true
+			}
+		}
+		for i := range results {
+			results[i].Installed = installed[results[i].ID]
+		}
+	} else {
+		for i := range results {
+			results[i].Installed = results[i].State == Detected
+		}
 	}
 
 	// A harness is configured when planning "present" for it is a no-op.
@@ -79,8 +98,8 @@ func (d *Detector) DetectIn(ctx context.Context, scope Scope) []Harness {
 	}
 
 	sort.Slice(results, func(i, j int) bool {
-		ia := results[i].Selectable()
-		ja := results[j].Selectable()
+		ia := results[i].Relevant()
+		ja := results[j].Relevant()
 		if ia != ja {
 			return ia
 		}

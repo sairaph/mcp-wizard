@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/sairaph/mcp-wizard/budget"
 )
@@ -192,4 +193,38 @@ func TestPaginateRenderError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected render error to propagate")
 	}
+}
+
+func FuzzTruncate(f *testing.F) {
+	f.Add("hello world", 3, 0)
+	f.Add("héllo wörld ünïcode", 2, 5)
+	f.Add("", 1, 1)
+	f.Add(strings.Repeat("a", 5000), 100, 300)
+	f.Fuzz(func(t *testing.T, text string, tokenLimit, byteLimit int) {
+		if !utf8.ValidString(text) {
+			return
+		}
+		if tokenLimit > 1<<16 || byteLimit > 1<<20 || len(text) > 1<<16 {
+			return
+		}
+		prefix, tokens, truncated, err := budget.Truncate(text, tokenLimit, byteLimit)
+		if err != nil {
+			t.Fatalf("Truncate(%q,%d,%d): %v", text, tokenLimit, byteLimit, err)
+		}
+		if !strings.HasPrefix(text, prefix) {
+			t.Fatalf("result is not a prefix")
+		}
+		if !utf8.ValidString(prefix) {
+			t.Fatalf("result is not valid UTF-8")
+		}
+		if byteLimit > 0 && len(prefix) > byteLimit {
+			t.Fatalf("byte limit %d exceeded: %d", byteLimit, len(prefix))
+		}
+		if tokenLimit > 0 && tokens > tokenLimit {
+			t.Fatalf("token limit %d exceeded: %d", tokenLimit, tokens)
+		}
+		if !truncated && prefix != text {
+			t.Fatalf("shortened without reporting truncation")
+		}
+	})
 }

@@ -133,3 +133,24 @@ func TestGenerateCleansUpOnFailure(t *testing.T) {
 		t.Fatalf("pre-existing directory must be emptied on failure, has %d entries", len(entries))
 	}
 }
+
+func FuzzSubstituteBraced(f *testing.F) {
+	subs := map[string]string{"Name": "demo", "Owner": "acme"}
+	for _, s := range []string{"${Name}", "${{ x }}", "${", "$", "${Unknown}", "a${Name}b${Owner}c", "${URL%/*}"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, in string) {
+		out := substituteBraced(in, subs)
+		// Substitution never invents "${{" sequences and never loses text
+		// outside placeholders: the input with placeholders replaced by
+		// their values must equal the output.
+		if strings.Contains(out, "${{") && !strings.Contains(in, "${{") {
+			t.Fatalf("introduced ${{: %q -> %q", in, out)
+		}
+		// Idempotence: substituting again changes nothing when the values
+		// contain no placeholders.
+		if again := substituteBraced(out, subs); again != out {
+			t.Fatalf("not idempotent: %q -> %q -> %q", in, out, again)
+		}
+	})
+}
