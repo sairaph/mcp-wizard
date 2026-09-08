@@ -6,11 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sairaph/mcp-wizard/app"
@@ -23,6 +27,7 @@ import (
 	"github.com/sairaph/mcp-wizard/flow"
 	"github.com/sairaph/mcp-wizard/harness"
 	"github.com/sairaph/mcp-wizard/installer"
+	"github.com/sairaph/mcp-wizard/proxy"
 	"github.com/sairaph/mcp-wizard/secret"
 	"github.com/sairaph/mcp-wizard/tui"
 	"github.com/sairaph/mcp-wizard/update"
@@ -49,7 +54,7 @@ func init() {
 }
 
 var usageSpecs = []cli.Spec{
-	{Name: "mcp", Description: "Run the MCP server (default when not in a terminal)"},
+	{Name: "mcp", Description: "Run the MCP server, or bridge to the remote endpoint (default when not in a terminal)"},
 	{Name: "install", Description: "Install and configure AI client integration"},
 	{Name: "uninstall", Description: "Remove AI client integration"},
 	{Name: "add", Description: "Register the server in this project's AI client configs"},
@@ -66,6 +71,9 @@ func main() {
 	// Bare invocation in a terminal opens the app; everywhere else (an AI
 	// client spawning us, a pipe) it is the MCP server, which cli.Parse
 	// reports as "mcp".
+	if opts := updateOptions(); opts.InstallDir != "" {
+		update.RemoveStaleBinaries(opts.InstallDir, opts.BinaryName)
+	}
 	if len(os.Args) == 1 && tui.IsInteractive() {
 		os.Exit(runApp(ctx))
 	}
@@ -82,7 +90,7 @@ func main() {
 
 	switch cmd.Name {
 	case "mcp":
-		os.Exit(runMCPServer(ctx))
+		os.Exit(runMCPServer(ctx, cmd))
 	case "install", "configure":
 		if cmd.Scope == string(harness.ScopeProject) {
 			os.Exit(runAdd(ctx, cmd))
@@ -207,8 +215,17 @@ func byID(harnesses []harness.Harness) map[harness.ID]harness.Harness {
 	return m
 }
 
+// credentialKey is the store key the bridge reads the remote token from.
+func credentialKey() string {
+	if r := domain.Remote(); r != nil && r.CredentialKey != "" {
+		return r.CredentialKey
+	}
+	return "token"
+}
+
 // saveCredentialsFromFlags stores --email/--token given to an unattended
-// install so the server can use them without a login step.
+// install so the server can use them without a login step. The token is
+// stored under the key the bridge reads.
 func saveCredentialsFromFlags(ctx context.Context, store secret.Store, cmd cli.Command) error {
 	if len(cmd.Credentials) == 0 {
 		return nil
@@ -218,9 +235,56 @@ func saveCredentialsFromFlags(ctx context.Context, store secret.Store, cmd cli.C
 		return err
 	}
 	for k, v := range cmd.Credentials {
+		if k == "token" {
+			k = credentialKey()
+			v = strings.TrimSpace(v)
+		}
 		sess.Set(k, v)
 	}
 	return store.Save(ctx, sess)
+}
+
+// loadCredential returns the stored value for key, looking in the current
+// project's store first (where `add` saves it) and then the global one.
+func loadCredential(ctx context.Context, key string) (string, error) {
+	paths := []string{domain.CredentialPath()}
+	if cwd, err := os.Getwd(); err == nil {
+		paths = append([]string{domain.ProjectCredentialPath(cwd)}, paths...)
+	}
+	for _, path := range paths {
+		sess, exists, err := secret.NewFileStore(path).Load(ctx)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			continue
+		}
+		if v := strings.TrimSpace(sess.GetString(key)); v != "" {
+			return v, nil
+		}
+	}
+	return "", nil
+}
+
+// checkRemoteURL refuses to send a credential over plain HTTP to anything
+// but a loopback address.
+func checkRemoteURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid remote URL %q: %w", raw, err)
+	}
+	switch u.Scheme {
+	case "https":
+		return nil
+	case "http":
+		host := u.Hostname()
+		if host == "localhost" || net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback() {
+			return nil
+		}
+		return fmt.Errorf("remote URL %q uses plain http; the credential would be sent in cleartext (use https)", raw)
+	default:
+		return fmt.Errorf("remote URL %q must use https", raw)
+	}
 }
 
 // --- Install / add ---
@@ -429,6 +493,9 @@ func newDoctor(ctx context.Context) *doctor.Runner {
 		credentialsCheck{path: domain.CredentialPath()},
 		clientsCheck{},
 	)
+	if remote := domain.Remote(); remote != nil {
+		r.Add(remoteCheck{remote: remote})
+	}
 	if version != "dev" {
 		r.Add(doctor.UpdateCheck{Opts: opts})
 	}
@@ -450,6 +517,67 @@ func (c credentialsCheck) Run(_ context.Context) doctor.Result {
 		return doctor.Result{Name: c.Name(), Status: doctor.Warn, Detail: "not signed in; run `${BinaryName} login`"}
 	}
 	return doctor.Result{Name: c.Name(), Status: doctor.OK, Detail: c.path}
+}
+
+// remoteCheck confirms the remote endpoint accepts the stored credential
+// with a single bounded MCP initialize request. It does not open a session,
+// so nothing has to be torn down afterwards.
+type remoteCheck struct{ remote *domain.RemoteConfig }
+
+func (remoteCheck) Name() string { return "Remote endpoint" }
+
+func (c remoteCheck) Run(ctx context.Context) doctor.Result {
+	if err := checkRemoteURL(c.remote.URL); err != nil {
+		return doctor.Result{Name: c.Name(), Status: doctor.Fail, Detail: err.Error()}
+	}
+	token, err := loadCredential(ctx, c.remote.CredentialKey)
+	if err != nil {
+		return doctor.Result{Name: c.Name(), Status: doctor.Fail, Detail: err.Error()}
+	}
+	if token == "" {
+		return doctor.Result{Name: c.Name(), Status: doctor.Warn, Detail: "no credential stored; run `${BinaryName} login`"}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"${BinaryName}-doctor","version":"` + version + `"}}}`
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.remote.URL, strings.NewReader(body))
+	if err != nil {
+		return doctor.Result{Name: c.Name(), Status: doctor.Fail, Detail: err.Error()}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	if c.remote.HeaderName != "" {
+		req.Header.Set(c.remote.HeaderName, c.remote.HeaderPrefix+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return doctor.Result{Name: c.Name(), Status: doctor.Fail, Detail: oneLine(fmt.Sprintf("%s: %v", c.remote.URL, err))}
+	}
+	defer resp.Body.Close()
+	// Tell the server we are not keeping the session it may have created.
+	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" && resp.StatusCode < 300 {
+		if del, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.remote.URL, nil); err == nil {
+			del.Header.Set("Mcp-Session-Id", sid)
+			if c.remote.HeaderName != "" {
+				del.Header.Set(c.remote.HeaderName, c.remote.HeaderPrefix+token)
+			}
+			if r, err := http.DefaultClient.Do(del); err == nil {
+				r.Body.Close()
+			}
+		}
+	}
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return doctor.Result{Name: c.Name(), Status: doctor.Fail, Detail: fmt.Sprintf("%s rejected the stored credential (HTTP %d); run `${BinaryName} login`", c.remote.URL, resp.StatusCode)}
+	case resp.StatusCode >= 300:
+		return doctor.Result{Name: c.Name(), Status: doctor.Fail, Detail: fmt.Sprintf("%s: HTTP %d", c.remote.URL, resp.StatusCode)}
+	}
+	return doctor.Result{Name: c.Name(), Status: doctor.OK, Detail: c.remote.URL}
+}
+
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // clientsCheck lists the AI clients that have this server registered.
@@ -607,8 +735,17 @@ func (m *appState) View() string {
 
 // --- MCP Server ---
 
-func runMCPServer(ctx context.Context) int {
+func runMCPServer(ctx context.Context, cmd cli.Command) int {
 	transport := os.Getenv("TRANSPORT")
+
+	// --remote, or a configured remote endpoint when TRANSPORT is not set
+	// explicitly, turns this binary into a stdio bridge: the AI client talks
+	// to us, we talk to the remote with the stored credential. An explicit
+	// TRANSPORT always serves the embedded server.
+	if remoteURL, remote := bridgeTarget(cmd); remoteURL != "" && (cmd.Remote != "" || transport == "") {
+		return runBridge(ctx, remoteURL, remote)
+	}
+
 	if transport == "" {
 		transport = "stdio"
 	}
@@ -627,6 +764,55 @@ func runMCPServer(ctx context.Context) int {
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, err)
+	return 1
+}
+
+// bridgeTarget returns the remote URL to bridge to: --remote wins, then the
+// project's RemoteConfig. The second value carries the header settings.
+func bridgeTarget(cmd cli.Command) (string, *domain.RemoteConfig) {
+	remote := domain.Remote()
+	if cmd.Remote != "" {
+		if remote == nil {
+			// Ad-hoc bridge on a project without a configured remote: a
+			// bearer token stored with `login --token`.
+			remote = &domain.RemoteConfig{HeaderName: "Authorization", HeaderPrefix: "Bearer ", CredentialKey: "token"}
+		}
+		return cmd.Remote, remote
+	}
+	if remote != nil {
+		return remote.URL, remote
+	}
+	return "", nil
+}
+
+func runBridge(ctx context.Context, remoteURL string, remote *domain.RemoteConfig) int {
+	if err := checkRemoteURL(remoteURL); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	err := proxy.Run(ctx, proxy.Config{
+		URL: remoteURL,
+		HeaderFunc: func(ctx context.Context) (map[string]string, error) {
+			if remote.HeaderName == "" || remote.CredentialKey == "" {
+				return nil, nil
+			}
+			token, err := loadCredential(ctx, remote.CredentialKey)
+			if err != nil {
+				return nil, err
+			}
+			if token == "" {
+				return nil, fmt.Errorf("no credential stored; run `${BinaryName} login` (or `${BinaryName} login --token <token>`) first")
+			}
+			return map[string]string{remote.HeaderName: remote.HeaderPrefix + token}, nil
+		},
+	})
+	if err == nil || errors.Is(err, context.Canceled) {
+		return 0
+	}
+	fmt.Fprintln(os.Stderr, err)
+	if errors.Is(err, proxy.ErrUnauthorized) {
+		fmt.Fprintln(os.Stderr, "  The stored credential was rejected; run `${BinaryName} login` to replace it.")
+	}
 	return 1
 }
 

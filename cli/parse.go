@@ -20,6 +20,7 @@ type Command struct {
 	ServerName string   // --name
 	Scope      string   // --scope (e.g., "project")
 	Dir        string   // --dir (project directory, used with --scope project)
+	Remote     string   // --remote URL (mcp: bridge stdio to a remote Streamable HTTP server)
 
 	// Credentials carries --email, --token, etc. for unattended login.
 	Credentials map[string]string
@@ -106,6 +107,7 @@ func Parse(args []string) (Command, error) {
 		cmd.Name = "mcp"
 		fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)
 		fs.Usage = func() {}
+		fs.StringVar(&cmd.Remote, "remote", "", "bridge stdio to this remote Streamable HTTP endpoint")
 		if err := fs.Parse(tail); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
 				return cmd, ErrUsage

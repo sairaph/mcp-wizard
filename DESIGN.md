@@ -213,6 +213,104 @@ projects.
 
 ---
 
+## Remote Servers and Authentication
+
+Status: designed 2026-09-08 from a survey of 28 hosted MCP providers and every
+harness config format. Bridge delivery is implemented (`proxy/`, the
+template's `domain.Remote()` and `mcp --remote`). Direct delivery is blocked
+on detect-harness gaining a `RemoteServer` (spec in that repo's
+`note-from-mcp-wizard.md`).
+
+### What providers actually need
+
+| Auth shape | Share of surveyed providers | What must land in the harness config |
+|---|---|---|
+| OAuth at first use (DCR / CIMD) | most; six offer nothing else | url + transport tag only; the harness runs the login |
+| OAuth with a pre-registered client | GitHub, Slack, Asana, HubSpot | url + client id; the client secret never in the file |
+| Static token in `Authorization: Bearer` | second most common; three require it | a header whose value is the secret |
+| Custom header or scheme | Sentry, Context7, Exa, Atlassian | same, with a different header name or prefix |
+| Key in URL query | Exa, Tavily, Zapier | url only, secret embedded; discouraged |
+
+### The delivery problem
+
+A header value has to reach the harness process. Harnesses disagree on how
+a config may reference a secret: `${VAR}` (Claude Code, Gemini, Kiro, Amp,
+Copilot CLI), `${env:VAR}` (Cursor, Windsurf, Zoo Code, Amazon Q, VS Code),
+`{env:VAR}` (OpenCode), `${{ secrets.VAR }}` from `.env` files (Continue),
+an env var name only (Codex `bearer_token_env_var` / `env_http_headers`), a
+password prompt (VS Code `inputs`), or nothing at all (Zed, Cline, Junie,
+JetBrains AI: literal values only). Claude Desktop cannot hold a remote entry
+in its config file.
+
+Env-var references also assume the variable is set where the harness runs.
+GUI editors started from a dock or launcher do not inherit shell profile
+exports, so "export TOKEN in your .zshrc" is not a reliable instruction.
+
+### Design
+
+`harness.ServerSpec` grows a transport and the remote fields:
+
+```go
+type ServerSpec struct {
+    Name      string
+    Command   string            // stdio
+    Args      []string
+    Env       map[string]string
+    Transport Transport         // TransportStdio (default) | TransportHTTP
+    URL       string            // http
+    Headers   []Header          // http; values may be secret references
+    OAuth     *OAuthClient      // http; nil = harness discovers (DCR/CIMD)
+}
+```
+
+`Header.Value` is either a literal or `{Prefix, Secret: SecretRef{EnvVar,
+Prompt}}`; detect-harness renders the reference in each harness's own syntax
+and reports harnesses that cannot express it.
+
+The wizard offers two ways to deliver a static secret, chosen per project in
+`domain.AuthConfig` and overridable per install:
+
+1. Direct. The harness config carries the remote entry. The secret is
+   referenced through the harness's mechanism where one exists; where none
+   exists (Zed, Cline, Junie) the wizard asks before inlining the value, or
+   skips the harness. This is the right mode for providers whose users expect
+   native harness OAuth, and for OAuth-open servers where no secret exists.
+2. Bridge (default for static secrets). The harness is registered with an
+   ordinary stdio entry pointing at the generated binary (`<bin> mcp`; the
+   endpoint comes from `domain.Remote()`), and the binary forwards stdio to
+   the remote over Streamable HTTP, adding the header from its own
+   credential store.
+   The secret lives once, in `credentials.json` (0600), never in any harness
+   file, and every harness including Claude Desktop works identically. Cost:
+   the binary must be installed locally, which the one-line installer already
+   guarantees.
+
+Implemented (bridge):
+
+- `proxy.Run` connects a local transport (stdio by default) to a remote
+  `StreamableClientTransport` and copies JSON-RPC messages both ways without
+  interpreting them, injecting configured headers on every request and the
+  protocol version negotiated by the initialize handshake. HTTP 401/403 is
+  surfaced as `proxy.ErrUnauthorized`. Server-initiated messages outside a
+  request (the standalone SSE stream) are not forwarded in this cut.
+- `cli`: `mcp --remote <url>`.
+- Template: `domain.Remote()` returns a `RemoteConfig{URL, HeaderName,
+  HeaderPrefix, CredentialKey, Prompt}` (nil by default); when set, the
+  login step collects the token (masked), `mcp` runs the bridge, and doctor
+  opens a session against the endpoint with the stored credential. The
+  AI-client registration is the ordinary stdio entry, so nothing changes in
+  detect-harness.
+
+Remaining (direct):
+
+- `harness/`: the `ServerSpec` fields above; `Harness.Remote` capability
+  flags copied from detect-harness so `HarnessStep` can show "bridge" or
+  "unsupported" next to each client.
+- `installer/`: an `AuthStep` collecting delivery (direct / bridge) when a
+  project allows both; `ApplyStep` builds the per-harness remote spec.
+  Unattended flags: `--deliver direct|bridge`.
+- OAuth through the bridge (the login step currently collects a token).
+
 ## Dependency Graph
 
 Actual imports between library packages:

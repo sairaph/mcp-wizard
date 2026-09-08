@@ -264,3 +264,17 @@ func TestParseEmptyCredentials(t *testing.T) {
 		t.Errorf("expected empty Credentials, got %v", cmd.Credentials)
 	}
 }
+
+func TestParseMCPRemote(t *testing.T) {
+	cmd, err := cli.Parse([]string{"mcp", "--remote", "https://mcp.example.com/mcp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.Name != "mcp" || cmd.Remote != "https://mcp.example.com/mcp" {
+		t.Fatalf("got name=%q remote=%q", cmd.Name, cmd.Remote)
+	}
+	cmd, err = cli.Parse([]string{"serve"})
+	if err != nil || cmd.Remote != "" {
+		t.Fatalf("plain serve: remote=%q err=%v", cmd.Remote, err)
+	}
+}

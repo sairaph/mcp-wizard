@@ -50,7 +50,7 @@ generates a complete project so you only write your domain logic and MCP tools.
 
 - **Project scaffold** - `mcp-wizard new` generates a complete project with
   `install.sh`/`install.ps1`, GitHub CI/CD workflows, and a wired `main.go`.
-- **24 library packages** - CLI parsing, token-budget pagination, output
+- **25 library packages** - CLI parsing, token-budget pagination, output
   rendering, install wizard steps, credential management, self-update, health
   checks, TUI components, daemon lifecycle, one-shot command registry, and more.
 - **AI client detection** - registers your server with 13+ AI clients via the
@@ -63,6 +63,11 @@ generates a complete project so you only write your domain logic and MCP tools.
   (Unix socket + JSON-RPC IPC), with autostart and graceful shutdown.
 - **One-shot CLI commands** - register standalone commands that share business
   logic with the TUI app.
+- **Remote servers** - bridge mode: the installed binary forwards the AI
+  client's stdio session to a hosted Streamable HTTP endpoint and adds the
+  credential from its own store, so hosted MCP providers get the same
+  one-line installer and every client works, including ones whose config
+  cannot hold a remote entry.
 - **Self-update** - semver version comparison, GitHub release checking, SHA256
   verification, atomic binary swap with cross-device copy fallback.
 - **Doctor** - health checks for executable, PATH, config, and update status.
@@ -92,7 +97,7 @@ The generated binary's command surface:
 | Command | What it does |
 |---|---|
 | `<bin>` | TUI app in a terminal, MCP server (stdio) otherwise |
-| `<bin> mcp` | MCP server over stdio (`TRANSPORT=http ADDR=host:port` for Streamable HTTP) |
+| `<bin> mcp` | MCP server over stdio (`TRANSPORT=http ADDR=host:port` for Streamable HTTP); with a `domain.Remote()` config or `--remote <url>`, a bridge to that endpoint |
 | `<bin> install` | Wizard: pick AI clients, sign in, register. `--yes` for unattended, `--dry-run` to preview |
 | `<bin> add` | Same, scoped to the current project's client configs |
 | `<bin> uninstall` | Remove the registration |
@@ -128,6 +133,7 @@ The generated binary's command surface:
 | `daemon/lock` | File-lock-based daemon lifecycle |
 | `daemon/socket` | Unix-socket daemon with JSON-RPC IPC |
 | `daemon/rpc` | JSON-RPC protocol types |
+| `proxy` | Stdio-to-Streamable-HTTP bridge with credential injection (remote servers) |
 
 ## Layout
 

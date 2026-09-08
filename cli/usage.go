@@ -49,6 +49,8 @@ func Usage(w io.Writer, specs []Spec) {
 	fmt.Fprintf(w, "  --clients      Comma-separated client IDs\n")
 	fmt.Fprintf(w, "  --scope        Configuration scope: project (default: global)\n")
 	fmt.Fprintf(w, "  --dir          Project directory for --scope project and add\n")
+	fmt.Fprintf(w, "\nServer flags:\n")
+	fmt.Fprintf(w, "  --remote       Bridge stdio to a remote Streamable HTTP endpoint\n")
 	fmt.Fprintf(w, "\nUpdate flags:\n")
 	fmt.Fprintf(w, "  --from         Swap in a pre-downloaded binary instead of downloading\n")
 }
