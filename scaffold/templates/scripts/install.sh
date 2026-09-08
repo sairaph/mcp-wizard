@@ -3,7 +3,6 @@ set -e
 OWNER="${Owner}"
 REPO="${BinaryName}"
 BIN="${BinaryName}"
-DAEMON=false
 CONFIGURE_ARGS=""
 
 # --- detect OS / arch ------------------------------------------------------
@@ -75,7 +74,11 @@ if [ -n "$SHA256_CMD" ]; then
             printf '\n  SHA256 mismatch.\n' >&2
             exit 1
         fi
+    else
+        printf '  Warning: could not fetch SHA256SUMS.txt; the download was not verified.\n' >&2
     fi
+else
+    printf '  Warning: no sha256 tool found; the download was not verified.\n' >&2
 fi
 
 if [ ! -s "$TEMP" ]; then

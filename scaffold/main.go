@@ -1,9 +1,15 @@
 // Command mcp-wizard scaffolds new MCP server projects.
+//
+// Usage:
+//
+//	mcp-wizard [new] --name <name> --owner <owner> [--dir <dir>]
+//	mcp-wizard              (interactive, when run from a terminal)
 package main
 
 import (
 	"context"
 	"embed"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -23,6 +29,8 @@ import (
 //go:embed all:templates
 var templateFS embed.FS
 
+var version = "dev"
+
 var validOwner = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]?[A-Za-z0-9])*$|^[A-Za-z0-9]$`)
 var validName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
@@ -34,78 +42,149 @@ var goKeywords = map[string]bool{
 	"select": true, "struct": true, "switch": true, "type": true, "var": true,
 }
 
-func main() {
-	name := flag.String("name", "", "MCP server name (Go identifier)")
-	owner := flag.String("owner", "", "GitHub owner (username or org)")
-	dir := flag.String("dir", "", "target directory (default: ./<name>)")
-	flag.Parse()
+// libraryModule is the module path generated projects import.
+const libraryModule = "github.com/sairaph/mcp-wizard"
 
-	if (*name == "") != (*owner == "") {
-		fmt.Fprintf(os.Stderr, "Error: --name and --owner must be provided together\n")
+const usageText = "Usage: mcp-wizard [new] --name <name> --owner <owner> [--dir <dir>]\n" +
+	"       mcp-wizard version\n\n" +
+	"Run without arguments in a terminal for the interactive wizard.\n" +
+	"Set MCP_WIZARD_LIBRARY=<path> to build the project against a local checkout of the library.\n"
+
+func main() {
+	args := os.Args[1:]
+	// "new" is the documented subcommand; it is optional because the flags
+	// alone identify the request.
+	if len(args) > 0 {
+		switch args[0] {
+		case "new":
+			args = args[1:]
+		case "version", "--version", "-v":
+			fmt.Println(version)
+			return
+		case "help", "--help", "-h":
+			fmt.Print(usageText)
+			return
+		}
+	}
+
+	fs := flag.NewFlagSet("mcp-wizard", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	name := fs.String("name", "", "MCP server name (Go identifier)")
+	owner := fs.String("owner", "", "GitHub owner (username or org)")
+	dir := fs.String("dir", "", "target directory (default: ./<name>)")
+	fs.Usage = func() {
+		fmt.Fprint(os.Stderr, usageText, "\nFlags:\n")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			os.Exit(0)
+		}
+		os.Exit(2)
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "Error: unexpected argument %q\n\n%s", fs.Arg(0), usageText)
 		os.Exit(2)
 	}
 
-	if *dir != "" && (*name == "" || *owner == "") {
-		fmt.Fprintf(os.Stderr, "Error: --dir requires --name and --owner\n")
+	if (*name == "") != (*owner == "") {
+		fmt.Fprintf(os.Stderr, "Error: --name and --owner must be provided together\n\n%s", usageText)
+		os.Exit(2)
+	}
+	if *dir != "" && *name == "" {
+		fmt.Fprintf(os.Stderr, "Error: --dir requires --name and --owner\n\n%s", usageText)
 		os.Exit(2)
 	}
 
 	// Flags provided - run CLI mode.
-	if *name != "" && *owner != "" {
-		runCLI(*name, *owner, *dir)
-		return
+	if *name != "" {
+		os.Exit(runCLI(*name, *owner, *dir))
 	}
 
-	// No flags - show usage or open TUI.
+	// No flags - open the TUI or show usage.
 	if tui.IsInteractive() {
 		os.Exit(runTUI())
 	}
-	fmt.Fprintf(os.Stderr, "Usage: mcp-wizard --name <name> --owner <owner> [--dir <dir>]\n")
+	fmt.Fprint(os.Stderr, usageText)
 	os.Exit(2)
 }
 
 // --- CLI mode ---
 
-func runCLI(name, owner, dir string) {
-	if !validOwner.MatchString(owner) {
-		fmt.Fprintf(os.Stderr, "Error: --owner must match %s\n", validOwner.String())
-		os.Exit(2)
+// runCLI validates the inputs and generates the project, printing any error.
+func runCLI(name, owner, dir string) int {
+	if err := validateInputs(name, owner); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 2
 	}
-	if !validName.MatchString(name) {
-		fmt.Fprintf(os.Stderr, "Error: --name must be a valid Go identifier\n")
-		os.Exit(2)
+	if _, err := exec.LookPath("go"); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: go is not installed or not on PATH. Install Go from https://go.dev/dl/\n")
+		return 1
 	}
-	if goKeywords[name] {
-		fmt.Fprintf(os.Stderr, "Error: --name %q is a Go keyword and cannot be used\n", name)
-		os.Exit(2)
-	}
-
 	targetDir := dir
 	if targetDir == "" {
 		targetDir = "./" + name
 	}
-
-	if _, err := exec.LookPath("go"); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: go is not installed. Install Go from https://go.dev/dl/\n")
-		os.Exit(1)
+	if err := generate(targetDir, name, owner); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
 	}
+	fmt.Printf("Created MCP server project at %s\n", targetDir)
+	return 0
+}
 
+func validateInputs(name, owner string) error {
+	if !validOwner.MatchString(owner) {
+		return fmt.Errorf("--owner must be a GitHub username or organisation (letters, digits, single hyphens), got %q", owner)
+	}
+	if !validName.MatchString(name) {
+		return fmt.Errorf("--name must be a valid Go identifier (letters, digits, underscores), got %q", name)
+	}
+	if goKeywords[name] {
+		return fmt.Errorf("--name %q is a Go keyword and cannot be used", name)
+	}
+	return nil
+}
+
+// generate writes the project into targetDir and initialises its Go module.
+// targetDir must not exist or must be empty. If any step fails, everything
+// generate created is removed again so a retry starts clean.
+func generate(targetDir, name, owner string) (err error) {
+	existed := true
+	if _, statErr := os.Stat(targetDir); statErr != nil {
+		if !os.IsNotExist(statErr) {
+			return fmt.Errorf("inspect %s: %w", targetDir, statErr)
+		}
+		existed = false
+	}
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating directory: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("create directory: %w", err)
 	}
 	entries, err := os.ReadDir(targetDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading directory: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("read directory: %w", err)
 	}
 	if len(entries) > 0 {
-		fmt.Fprintf(os.Stderr, "Error: %s is not empty\n", targetDir)
-		os.Exit(1)
+		return fmt.Errorf("%s is not empty", targetDir)
 	}
 
-	modulePath := fmt.Sprintf("github.com/%s/%s", strings.ToLower(owner), strings.ToLower(name))
+	defer func() {
+		if err == nil {
+			return
+		}
+		if existed {
+			// Leave the directory itself, remove what we put in it.
+			if entries, readErr := os.ReadDir(targetDir); readErr == nil {
+				for _, e := range entries {
+					os.RemoveAll(filepath.Join(targetDir, e.Name()))
+				}
+			}
+			return
+		}
+		os.RemoveAll(targetDir)
+	}()
 
+	modulePath := fmt.Sprintf("github.com/%s/%s", strings.ToLower(owner), strings.ToLower(name))
 	subs := map[string]string{
 		"Name":       name,
 		"Owner":      owner,
@@ -116,32 +195,48 @@ func runCLI(name, owner, dir string) {
 	}
 
 	if err := scaffoldProject(targetDir, subs); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	if err := scaffoldScripts(targetDir, subs); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	initMod := exec.Command("go", "mod", "init", modulePath)
 	initMod.Dir = targetDir
-	if out, err := initMod.CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing Go module: %v\n%s\n", err, out)
-		os.Exit(1)
+	if out, runErr := initMod.CombinedOutput(); runErr != nil {
+		return fmt.Errorf("go mod init: %v\n%s", runErr, out)
+	}
+
+	// MCP_WIZARD_LIBRARY points the generated module at a local checkout of
+	// the library instead of the published module (used by CI and when
+	// developing the library itself).
+	if lib := os.Getenv("MCP_WIZARD_LIBRARY"); lib != "" {
+		abs, absErr := filepath.Abs(lib)
+		if absErr != nil {
+			return fmt.Errorf("MCP_WIZARD_LIBRARY: %w", absErr)
+		}
+		replace := exec.Command("go", "mod", "edit", "-replace", libraryModule+"="+abs)
+		replace.Dir = targetDir
+		if out, runErr := replace.CombinedOutput(); runErr != nil {
+			return fmt.Errorf("go mod edit -replace: %v\n%s", runErr, out)
+		}
 	}
 
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = targetDir
-	if out, err := tidy.CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error tidying module: %v\n%s\n", err, out)
-		os.Exit(1)
+	if out, runErr := tidy.CombinedOutput(); runErr != nil {
+		return fmt.Errorf("go mod tidy (network access to fetch dependencies is required): %v\n%s", runErr, out)
 	}
-
-	fmt.Printf("Created MCP server project at %s\n", targetDir)
+	return nil
 }
 
 // --- TUI mode ---
+
+const (
+	stepMenu app.Step = iota
+	stepForm
+	stepHelp
+)
 
 type tuiState struct {
 	app.AppModel
@@ -150,8 +245,7 @@ type tuiState struct {
 	dir          string
 	menu         *menu.Model
 	form         *form.Model
-	done         bool
-	runAfterQuit func()
+	runAfterQuit func() int
 }
 
 func runTUI() int {
@@ -163,9 +257,11 @@ func runTUI() int {
 			{Label: "Quit", Action: "quit"},
 		}
 	})
-	exitCode := app.Run(context.Background(), s, app.Options{Title: "mcp-wizard"})
-	if s.runAfterQuit != nil {
-		s.runAfterQuit()
+	exitCode := app.Run(context.Background(), s, app.Options{Title: "mcp-wizard", Version: version})
+	if exitCode == 0 && s.runAfterQuit != nil {
+		// Generation runs after the TUI has released the terminal so its
+		// output (and go's) is visible.
+		return s.runAfterQuit()
 	}
 	return exitCode
 }
@@ -175,44 +271,32 @@ func (s *tuiState) Init() tea.Cmd {
 }
 
 func (s *tuiState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if s.HandleGlobalKeys(msg) {
-		return s, nil
+	if handled, cmd := s.HandleGlobalKeys(msg); handled {
+		return s, cmd
 	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if s.Step == 99 {
-			s.Step = 0
+		if s.Step == stepHelp {
+			s.Step = stepMenu
 			return s, nil
 		}
 	case app.ActionMsg:
 		switch msg.Source {
 		case "menu":
-			if msg.Value == "select" {
+			switch msg.Value {
+			case "quit":
+				s.Quit = true
+				return s, tea.Quit
+			case "select":
 				action, _ := msg.Data.(string)
 				switch action {
 				case "new":
-					s.Step = 1
-					s.form = form.New("New Project", []form.Field{
-						{Label: "Project name", Validate: func(v string) error {
-							if !validName.MatchString(v) {
-								return fmt.Errorf("must be a valid Go identifier (letters, digits, underscores)")
-							}
-							if goKeywords[v] {
-								return fmt.Errorf("%q is a Go keyword", v)
-							}
-							return nil
-						}},
-						{Label: "GitHub owner", Validate: func(v string) error {
-							if !validOwner.MatchString(v) {
-								return fmt.Errorf("must match GitHub username or org pattern")
-							}
-							return nil
-						}},
-					})
+					s.Step = stepForm
+					s.form = newProjectForm()
 					return s, s.form.Init()
 				case "help":
-					s.Step = 99 // help screen
+					s.Step = stepHelp
 					return s, nil
 				case "quit":
 					s.Quit = true
@@ -225,42 +309,62 @@ func (s *tuiState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				vals := s.form.Values()
 				s.name = vals["Project name"]
 				s.owner = vals["GitHub owner"]
+				s.dir = strings.TrimSpace(vals["Directory (optional)"])
 				s.Quit = true
-				s.runAfterQuit = func() {
-					runCLI(s.name, s.owner, "")
+				s.runAfterQuit = func() int {
+					return runCLI(s.name, s.owner, s.dir)
 				}
 				return s, tea.Quit
 			case "cancelled":
-				s.Step = 0
+				s.Step = stepMenu
 				return s, nil
 			}
 		}
 		return s, nil
 	}
 
-	if s.Step == 0 && s.menu != nil {
-		cmd := s.menu.Update(msg)
-		return s, cmd
-	}
-	if s.Step == 1 && s.form != nil {
-		cmd := s.form.Update(msg)
-		return s, cmd
+	switch s.Step {
+	case stepMenu:
+		return s, s.menu.Update(msg)
+	case stepForm:
+		if s.form != nil {
+			return s, s.form.Update(msg)
+		}
 	}
 	return s, nil
 }
 
+func newProjectForm() *form.Model {
+	return form.New("New Project", []form.Field{
+		{Label: "Project name", Validate: func(v string) error {
+			if !validName.MatchString(v) {
+				return fmt.Errorf("must be a valid Go identifier (letters, digits, underscores)")
+			}
+			if goKeywords[v] {
+				return fmt.Errorf("%q is a Go keyword", v)
+			}
+			return nil
+		}},
+		{Label: "GitHub owner", Validate: func(v string) error {
+			if !validOwner.MatchString(v) {
+				return fmt.Errorf("must match GitHub username or org pattern")
+			}
+			return nil
+		}},
+		{Label: "Directory (optional)"},
+	})
+}
+
 func (s *tuiState) View() string {
-	if s.Step == 99 {
-		return "mcp-wizard --name <name> --owner <owner> [--dir <dir>]\n\nPress any key to return."
-	}
-	if s.Step == 0 && s.menu != nil {
+	switch s.Step {
+	case stepHelp:
+		return "\n  " + strings.ReplaceAll(usageText, "\n", "\n  ") + "\n  Press any key to return."
+	case stepMenu:
 		return s.menu.View()
-	}
-	if s.Step == 1 && s.form != nil {
-		return s.form.View()
-	}
-	if s.Status != "" {
-		return s.Status
+	case stepForm:
+		if s.form != nil {
+			return s.form.View()
+		}
 	}
 	return ""
 }
@@ -333,7 +437,8 @@ func scaffoldScripts(targetDir string, subs map[string]string) error {
 }
 
 // substituteBraced replaces ${key} patterns in s using subs, leaving
-// $var (unbraced) and ${{ ... }} (GitHub Actions / PowerShell) intact.
+// $var (unbraced), unknown ${other} keys, and ${{ ... }} (GitHub Actions /
+// PowerShell) intact.
 func substituteBraced(s string, subs map[string]string) string {
 	var out strings.Builder
 	for i := 0; i < len(s); i++ {

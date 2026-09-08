@@ -1,5 +1,7 @@
 version: 2
 
+project_name: ${BinaryName}
+
 builds:
   - id: ${BinaryName}
     main: .
@@ -16,6 +18,11 @@ archives:
 
 checksum:
   name_template: SHA256SUMS.txt
+
+release:
+  extra_files:
+    - glob: ./install.sh
+    - glob: ./install.ps1
 
 changelog:
   disable: true

@@ -2,8 +2,7 @@ param(
   [string]$Owner = "${Owner}",
   [string]$Repo = "${BinaryName}",
   [string]$Bin = "${BinaryName}",
-  [switch]$Daemon,
-  [string]$ConfigureArgs = ""
+  [string[]]$ConfigureArgs = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,22 +47,26 @@ if (-not (Test-Path "$target.new")) {
 }
 
 # Verify SHA256 checksum
-$lastSlash = $url.LastIndexOf('/')
-if ($lastSlash -le 0) { exit 1 }
-$checksumUrl = $url.Substring(0, $lastSlash) + '/SHA256SUMS.txt'
+$checksumUrl = $url.Substring(0, $url.LastIndexOf('/')) + '/SHA256SUMS.txt'
+$verified = $false
 try {
     $checksums = (Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing).Content
-    $pattern = ' ' + [regex]::Escape($asset) + '\s*$'
-    $expectedHash = ($checksums -split "`n" | ForEach-Object { $_.TrimEnd("`r") } | Where-Object { $_ -match $pattern }) -split ' ' | Select-Object -First 1
-    if ($expectedHash) {
+    $pattern = ' \*?' + [regex]::Escape($asset) + '\s*$'
+    $line = $checksums -split "`n" | ForEach-Object { $_.TrimEnd("`r") } | Where-Object { $_ -match $pattern } | Select-Object -First 1
+    if ($line) {
+        $expectedHash = ($line -split '\s+')[0].ToLower()
         $actualHash = (Get-FileHash -Path "$target.new" -Algorithm SHA256).Hash.ToLower()
-        if ($expectedHash.ToLower() -ne $actualHash) {
+        if ($expectedHash -ne $actualHash) {
             Write-Host "  SHA256 mismatch." -ForegroundColor Red
             Remove-Item "$target.new" -ErrorAction SilentlyContinue
             exit 1
         }
+        $verified = $true
     }
 } catch { }
+if (-not $verified) {
+    Write-Host "  Warning: could not verify SHA256SUMS.txt; the download was not verified." -ForegroundColor Yellow
+}
 
 # Swap the new binary into place using move-aside
 $oldTarget = "$target.old-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
@@ -96,7 +99,8 @@ if ($userPath -notlike "*$installDir*") {
 
 # --- launch the configurer ---
 try {
-    & $target configure $ConfigureArgs
+    & $target configure @ConfigureArgs
+    if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
 } catch {
     Write-Host "  configure did not complete: $_" -ForegroundColor Red
     Write-Host "  Re-run ``$Bin configure`` later to finish setup." -ForegroundColor Yellow

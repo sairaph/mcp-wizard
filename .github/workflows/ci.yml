@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Format
+        run: test -z "$(gofmt -l . scaffold)"
+
+      - name: Vet
+        run: go vet ./... && cd scaffold && go vet ./...
+
+      - name: Test
+        run: go test ./... && cd scaffold && go test ./...
+
+      - name: Scaffold a project and build it against this checkout
+        env:
+          MCP_WIZARD_LIBRARY: ${{ github.workspace }}
+        run: |
+          go build -o /tmp/mcp-wizard ./scaffold
+          /tmp/mcp-wizard new --name smoke --owner sairaph --dir /tmp/smoke
+          cd /tmp/smoke
+          go vet ./... && go test ./... && go build ./...

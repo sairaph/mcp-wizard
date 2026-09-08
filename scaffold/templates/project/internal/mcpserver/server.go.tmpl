@@ -3,12 +3,15 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sairaph/mcp-wizard/render"
 )
 
 // Server wraps the MCP server and domain logic.
@@ -17,7 +20,7 @@ type Server struct {
 	config    Config
 }
 
-// New creates a new MCP server with the given config.
+// New creates a new MCP server with the given config and registers its tools.
 func New(config Config) *Server {
 	srv := &Server{
 		config: config,
@@ -32,9 +35,8 @@ func New(config Config) *Server {
 		),
 	}
 
-	// Register your tools here.
-	// Example:
-	// registerGreet(srv.mcpServer, srv)
+	srv.registerGreet()
+	// Register your tools here, one register* method per tool.
 
 	return srv
 }
@@ -81,22 +83,48 @@ func (s *Server) runHTTP(ctx context.Context) error {
 	}()
 
 	fmt.Fprintf(os.Stderr, "${ServerName} listening on %s (Streamable HTTP)\n", addr)
-	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("serve http: %w", err)
 	}
 	return nil
 }
 
-// Register a tool:
+// --- Example tool: greet ---
 //
-// func registerGreet(srv *mcp.Server, s *Server) {
-//     mcp.AddTool(srv, &mcp.Tool{
-//         Name:        "greet",
-//         Description: "Say hello to someone.",
-//         InputSchema: ...,
-//     }, s.handleGreet)
-// }
-//
-// func (s *Server) handleGreet(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-//     return mcp.NewToolResultText("Hello, world!"), nil
-// }
+// Every tool follows this shape: a typed input struct whose jsonschema tags
+// become the tool's input schema, a typed frontmatter struct rendered as
+// YAML, and a Markdown body with guidance. Errors are returned as structured
+// results via render.ErrorResult so the model gets a code and a hint rather
+// than a bare failure. Delete this tool once you have your own.
+
+type greetInput struct {
+	Name string `json:"name" jsonschema:"the name to greet"`
+}
+
+type greetFront struct {
+	Greeting string `yaml:"greeting"`
+	Name     string `yaml:"name"`
+}
+
+func (s *Server) registerGreet() {
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name: "greet",
+		Description: "Return a greeting for the given name. Use it to confirm the ${ServerName} " +
+			"server is reachable and responding. The name must not be empty; the result carries the " +
+			"greeting in its frontmatter and a short message in the body.",
+	}, s.handleGreet)
+}
+
+func (s *Server) handleGreet(ctx context.Context, req *mcp.CallToolRequest, in greetInput) (*mcp.CallToolResult, any, error) {
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		return render.ErrorResult(render.Error{
+			Code:    render.CodeInvalidInput,
+			Message: "name must not be empty",
+			Hint:    "Call greet with {\"name\": \"world\"}.",
+		}), nil, nil
+	}
+	front := greetFront{Greeting: "Hello, " + name + "!", Name: name}
+	body := fmt.Sprintf("Greeted %s from ${ServerName} %s.", name, s.config.Version)
+	return render.SuccessResult(front, body), nil, nil
+}

@@ -2,17 +2,45 @@
 
 MCP server by ${Owner}.
 
-## Usage
-
-```sh
-go run . serve
-```
-
 ## Install
+
+macOS / Linux:
 
 ```sh
 curl -fsSL https://github.com/${Owner}/${Name}/releases/latest/download/install.sh | sh
 ```
+
+Windows (PowerShell):
+
+```powershell
+irm https://github.com/${Owner}/${Name}/releases/latest/download/install.ps1 | iex
+```
+
+The installer downloads the binary, adds it to PATH, and runs `${BinaryName} configure`
+to register the server with the AI clients on your machine.
+
+## Usage
+
+```sh
+${BinaryName}            # interactive app (in a terminal) or MCP server (stdio)
+${BinaryName} mcp        # MCP server over stdio
+${BinaryName} install    # register with AI clients (--yes for unattended)
+${BinaryName} add        # register in the current project's client configs
+${BinaryName} login      # sign in
+${BinaryName} doctor     # diagnose the installation
+${BinaryName} update     # self-update from GitHub releases
+```
+
+Set `TRANSPORT=http` and `ADDR=host:port` to serve over Streamable HTTP instead of stdio.
+
+## Develop
+
+```sh
+go vet ./... && go test ./...
+go run . mcp
+```
+
+Releases are built by GoReleaser when a `v*` tag is pushed.
 
 ## License
 

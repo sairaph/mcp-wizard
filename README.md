@@ -23,9 +23,10 @@ Windows (PowerShell):
 irm https://github.com/sairaph/mcp-wizard/releases/latest/download/install.ps1 | iex
 ```
 
-The installer downloads the scaffold binary, then run `mcp-wizard new` to
+The installer downloads the scaffold binary. Then run `mcp-wizard new` to
 generate a new MCP server project with install scripts, CI/CD, and a complete
-TUI application - all wired together and ready to build.
+TUI application - all wired together and ready to build. To build the
+scaffold from source instead: `go build -o mcp-wizard ./scaffold`.
 
 Linux x64/ARM64, macOS x64/Apple Silicon, and Windows x64/ARM64 are published.
 
@@ -74,13 +75,30 @@ generates a complete project so you only write your domain logic and MCP tools.
 # Install the scaffold
 curl -fsSL https://github.com/sairaph/mcp-wizard/releases/latest/download/install.sh | sh
 
-# Generate a new MCP server project
-mcp-wizard new --name my-server --owner myuser --dir ./my-server
-cd ./my-server
+# Generate a new MCP server project (or run mcp-wizard bare for the TUI)
+mcp-wizard new --name myserver --owner myuser --dir ./myserver
+cd ./myserver
 
-# Implement your domain logic and MCP tools
-# Then build and ship
+# It builds and runs as-is: an example "greet" tool, install wizard,
+# doctor, self-update and a menu-driven TUI app are already wired.
+go vet ./... && go test ./... && go run . mcp
+
+# Implement your domain logic and MCP tools in internal/, then tag a
+# release: GoReleaser publishes binaries, checksums and install scripts.
 ```
+
+The generated binary's command surface:
+
+| Command | What it does |
+|---|---|
+| `<bin>` | TUI app in a terminal, MCP server (stdio) otherwise |
+| `<bin> mcp` | MCP server over stdio (`TRANSPORT=http ADDR=host:port` for Streamable HTTP) |
+| `<bin> install` | Wizard: pick AI clients, sign in, register. `--yes` for unattended, `--dry-run` to preview |
+| `<bin> add` | Same, scoped to the current project's client configs |
+| `<bin> uninstall` | Remove the registration |
+| `<bin> login` | Sign in (or `--email`/`--token` unattended) |
+| `<bin> doctor` | Executable, PATH, credentials, client and update checks |
+| `<bin> update` | Self-update from GitHub releases with SHA256 verification |
 
 ## Packages
 
@@ -92,7 +110,7 @@ cd ./my-server
 | `flow` | Step abstraction + Flow runner for install wizards |
 | `tui` | Reusable Bubble Tea components (CheckboxList, RadioList, TextInput, ...) |
 | `harness` | detect-harness wrapper (library-owned types, no leak) |
-| `installer` | HarnessStep, LoginStep (multi-stage), unattended helpers |
+| `installer` | HarnessStep, LoginStep (multi-stage), TransportStep, ApplyStep, unattended helpers |
 | `secret` | Credential store (FileStore 0600 atomic, EnvStore), Session |
 | `update` | Self-update, semver, SHA256 verification, atomic swap |
 | `doctor` | Health checks (executable, PATH, config, update) |
@@ -106,10 +124,22 @@ cd ./my-server
 | `app/confirm` | Confirmation dialog |
 | `app/paginator` | Paginated list with next/prev |
 | `command` | One-shot CLI command registry |
-| `async` | Generic async loading helpers (Result[T], Load[T]) |
+| `async` | Generic async loading helpers (Result[T], Load[T], Start[T]) |
 | `daemon/lock` | File-lock-based daemon lifecycle |
 | `daemon/socket` | Unix-socket daemon with JSON-RPC IPC |
 | `daemon/rpc` | JSON-RPC protocol types |
+
+## Layout
+
+The library packages live at the repository root so that
+`github.com/sairaph/mcp-wizard/<package>` resolves. `scaffold/` is a nested
+module that builds the `mcp-wizard` binary. Both are in the `go.work`
+workspace:
+
+```sh
+go vet ./... && go test ./...             # library
+cd scaffold && go vet ./... && go test ./... && go build -o mcp-wizard .
+```
 
 ## Design
 
